@@ -1,70 +1,125 @@
-import { useEffect, useState } from "react";
-import { api } from "../../api/client";
-import type { CashSession } from "../../types";
+import { useEffect, useMemo, useState } from "react";
+import { subscribeCashSessions } from "../../api/collections";
+import { closeCashSession, errorMessage, openCashSession } from "../../api/functions";
+import type { CashSession, User } from "../../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
-export function CashPanel() {
-  const [current, setCurrent] = useState<CashSession | null>(null);
+export function CashPanel({ user }: { user: User }) {
   const [sessions, setSessions] = useState<CashSession[]>([]);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
   const [summary, setSummary] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  async function load() {
-    try {
-      const [active, history] = await Promise.all([
-        api<{ session: CashSession | null }>("/cash-register/current"),
-        api<{ sessions: CashSession[] }>("/cash-register"),
-      ]);
-      setCurrent(active.session);
-      setSessions(history.sessions);
-      setError("");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "No se pudo consultar la caja"); }
-  }
+  useEffect(
+    () =>
+      subscribeCashSessions(
+        // Un empleado sólo tiene permiso sobre sus propios cortes.
+        user.role === "EMPLOYEE" ? user.id : undefined,
+        (rows) => {
+          setSessions(rows);
+          setError("");
+        },
+        (reason) => setError(errorMessage(reason, "No se pudo consultar la caja")),
+      ),
+    [user.id, user.role],
+  );
 
-  useEffect(() => { void load(); }, []);
+  const current = useMemo(
+    () => sessions.find((session) => session.status === "OPEN" && session.userId === user.id) ?? null,
+    [sessions, user.id],
+  );
 
-  async function open(event: React.FormEvent) {
+  async function submit(event: React.FormEvent) {
     event.preventDefault();
+    setBusy(true);
+    setError("");
     try {
-      await api("/cash-register/open", { method: "POST", body: JSON.stringify({ openingAmount: Number(amount) }) });
-      setAmount(""); setSummary(""); await load();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "No se pudo abrir la caja"); }
-  }
-
-  async function close(event: React.FormEvent) {
-    event.preventDefault();
-    if (!current) return;
-    try {
-      const result = await api<{ session: { differenceAmount: number; expectedAmount: number } }>(`/cash-register/${current.id}/close`, {
-        method: "POST", body: JSON.stringify({ closingAmount: Number(amount) }),
-      });
-      setSummary(`Corte cerrado. Esperado: ${money.format(result.session.expectedAmount)} · Diferencia: ${money.format(result.session.differenceAmount)}`);
-      setAmount(""); await load();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "No se pudo cerrar la caja"); }
+      if (current) {
+        const result = await closeCashSession({
+          sessionId: current.id,
+          closingAmount: Number(amount),
+        });
+        setSummary(
+          `Corte cerrado. Esperado: ${money.format(result.expectedAmount)} · Diferencia: ${money.format(result.differenceAmount)}`,
+        );
+      } else {
+        await openCashSession({ openingAmount: Number(amount) });
+        setSummary("");
+      }
+      setAmount("");
+    } catch (reason) {
+      setError(
+        errorMessage(reason, current ? "No se pudo cerrar la caja" : "No se pudo abrir la caja"),
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <section className="reference-panel">
-      <div className="reference-heading"><h1>Cortes de caja</h1><p>Administra turnos, cobros y diferencias de efectivo.</p></div>
+      <div className="reference-heading">
+        <h1>Cortes de caja</h1>
+        <p>Administra turnos, cobros y diferencias de efectivo.</p>
+      </div>
       {error && <div className="notice error">{error}</div>}
       {summary && <div className="notice success">{summary}</div>}
       <div className="cash-layout">
         <article className="feature-card dark-card">
           <p className="eyebrow">Caja actual</p>
-          {current ? <><h3>Turno abierto</h3><strong className="cash-amount">{money.format(current.opening_amount)}</strong><p>Fondo inicial · abrió {new Date(current.opened_at).toLocaleString("es-MX")}</p></> : <><h3>Comienza tu turno</h3><p>Necesitas una caja abierta para procesar pagos.</p></>}
-          <form onSubmit={current ? close : open}>
+          {current ? (
+            <>
+              <h3>Turno abierto</h3>
+              <strong className="cash-amount">{money.format(current.openingAmount)}</strong>
+              <p>
+                Fondo inicial · abrió{" "}
+                {current.openedAt ? current.openedAt.toLocaleString("es-MX") : "hace un momento"}
+              </p>
+            </>
+          ) : (
+            <>
+              <h3>Comienza tu turno</h3>
+              <p>Necesitas una caja abierta para procesar pagos.</p>
+            </>
+          )}
+          <form onSubmit={submit}>
             <label>{current ? "Efectivo contado al cierre" : "Fondo inicial"}</label>
-            <input type="number" min="0" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required />
-            <button className="primary-button light-button">{current ? "Cerrar y generar corte" : "Abrir caja"}</button>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              required
+            />
+            <button className="primary-button light-button" disabled={busy}>
+              {current ? "Cerrar y generar corte" : "Abrir caja"}
+            </button>
           </form>
         </article>
         <article className="feature-card">
-          <p className="eyebrow">Historial reciente</p><h3>Últimos cortes</h3>
+          <p className="eyebrow">Historial reciente</p>
+          <h3>Últimos cortes</h3>
           <div className="history-list">
             {sessions.map((session) => (
-              <div key={session.id}><span><strong>{session.user_name}</strong><small>{new Date(session.opened_at).toLocaleDateString("es-MX")}</small></span><span><b className={`status ${session.status.toLowerCase()}`}>{session.status}</b><small>{session.closing_amount == null ? money.format(session.opening_amount) : money.format(session.closing_amount)}</small></span></div>
+              <div key={session.id}>
+                <span>
+                  <strong>{session.userName}</strong>
+                  <small>
+                    {session.openedAt ? session.openedAt.toLocaleDateString("es-MX") : "—"}
+                  </small>
+                </span>
+                <span>
+                  <b className={`status ${session.status.toLowerCase()}`}>{session.status}</b>
+                  <small>
+                    {session.closingAmount == null
+                      ? money.format(session.openingAmount)
+                      : money.format(session.closingAmount)}
+                  </small>
+                </span>
+              </div>
             ))}
             {!sessions.length && <p className="muted">Todavía no hay cortes.</p>}
           </div>

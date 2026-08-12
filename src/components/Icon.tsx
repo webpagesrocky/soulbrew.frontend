@@ -1,5 +1,5 @@
 interface IconProps {
-  name: "dashboard" | "orders" | "menu" | "cash" | "team" | "external" | "logout" | "coffee" | "sales" | "clock" | "check" | "trend";
+  name: "dashboard" | "orders" | "menu" | "cash" | "team" | "external" | "logout" | "coffee" | "sales" | "clock" | "check" | "trend" | "bag" | "instagram";
   size?: number;
 }
 
@@ -16,6 +16,8 @@ const paths: Record<IconProps["name"], React.ReactNode> = {
   clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
   check: <><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></>,
   trend: <><path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/></>,
+  bag: <><path d="M6 7h12l1 13.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20.5z"/><path d="M9 7a3 3 0 0 1 6 0"/></>,
+  instagram: <><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></>,
 };
 
 export function Icon({ name, size = 19 }: IconProps) {

@@ -1,52 +1,79 @@
 export type Role = "ADMIN" | "SUPERVISOR" | "EMPLOYEE";
 export type PaymentMethod = "CASH" | "CARD" | "TRANSFER";
 export type OrderStatus = "PENDING" | "PAID" | "CANCELLED";
+export type ProductCategory = "MATCHA" | "CAFE" | "CHAI" | "REFRESHER" | "TONICOS";
 
 export interface User {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: Role;
+  active: boolean;
+  createdAt: Date | null;
 }
 
 export interface Product {
-  id: number;
+  id: string;
   name: string;
   description: string | null;
+  category: ProductCategory;
   price: number;
   stock: number;
-  active: number | boolean;
+  active: boolean;
 }
 
 export interface OrderItem {
-  id: number;
-  product_id: number;
-  product_name: string;
+  productId: string;
+  productName: string;
   quantity: number;
-  unit_price: number;
+  unitPrice: number;
   subtotal: number;
 }
 
 export interface Order {
-  id: number;
-  customer_name: string;
+  id: string;
+  code: string;
+  customerName: string;
   status: OrderStatus;
-  payment_method: PaymentMethod | null;
+  paymentMethod: PaymentMethod | null;
   total: number;
-  created_at: string;
   items: OrderItem[];
+  cashSessionId: string | null;
+  createdAt: Date | null;
+  paidAt: Date | null;
+  cancelledAt: Date | null;
+  cancellationReason: string | null;
+}
+
+export interface CashTotals {
+  cashTotal: number;
+  cardTotal: number;
+  transferTotal: number;
+  salesTotal: number;
+  saleCount: number;
 }
 
 export interface CashSession {
-  id: number;
-  user_id: number;
-  user_name: string;
-  opening_amount: number;
-  closing_amount: number | null;
-  expected_amount: number | null;
-  difference_amount: number | null;
+  id: string;
+  userId: string;
+  userName: string;
+  openingAmount: number;
+  closingAmount: number | null;
+  expectedAmount: number | null;
+  differenceAmount: number | null;
+  totals: CashTotals | null;
   status: "OPEN" | "CLOSED";
-  opened_at: string;
-  closed_at: string | null;
+  openedAt: Date | null;
+  closedAt: Date | null;
 }
 
+export interface InventoryMovement {
+  id: string;
+  productId: string;
+  productName: string;
+  userId: string;
+  userName: string;
+  quantityChange: number;
+  reason: string;
+  createdAt: Date | null;
+}
