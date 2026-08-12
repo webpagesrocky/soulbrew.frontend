@@ -33,7 +33,7 @@ export function InternalView() {
         <header className="mobile-header"><span className="reference-brand"><span><Icon name="coffee" size={16}/></span><strong>Soul Brew</strong></span><button onClick={logout}>Salir</button></header>
         {tab === "dashboard" && <DashboardPanel onViewOrders={() => setTab("orders")}/>} 
         {tab === "orders" && <OrdersPanel user={user} />}
-        {tab === "cash" && <CashPanel />}
+        {tab === "cash" && <CashPanel user={user} />}
         {tab === "catalog" && canManage && <CatalogPanel user={user} />}
         {tab === "team" && canManage && <TeamPanel actor={user} />}
       </div>

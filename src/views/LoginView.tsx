@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { errorMessage } from "../api/functions";
 import { useAuth } from "../auth/AuthContext";
 
 export function LoginView() {
@@ -20,7 +21,7 @@ export function LoginView() {
       await login(email, password);
       navigate("/interna");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "No fue posible iniciar sesión");
+      setError(errorMessage(reason, "No fue posible iniciar sesión"));
     } finally {
       setLoading(false);
     }
