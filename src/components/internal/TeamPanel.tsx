@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { subscribeUsers } from "../../api/collections";
-import { createStaffUser, errorMessage } from "../../api/functions";
+import { errorMessage } from "../../api/errors";
 import type { Role, User } from "../../types";
 
 const roleLabel: Record<Role, string> = {
@@ -9,11 +9,9 @@ const roleLabel: Record<Role, string> = {
   EMPLOYEE: "Empleado",
 };
 
-export function TeamPanel({ actor }: { actor: User }) {
+export function TeamPanel({ actor: _actor }: { actor: User }) {
   const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
 
   useEffect(
     () =>
@@ -27,36 +25,13 @@ export function TeamPanel({ actor }: { actor: User }) {
     [],
   );
 
-  async function create(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    setBusy(true);
-    try {
-      await createStaffUser({
-        name: String(data.get("name")),
-        email: String(data.get("email")),
-        password: String(data.get("password")),
-        role: data.get("role") as Role,
-      });
-      form.reset();
-      setMessage("Usuario creado correctamente.");
-      setError("");
-    } catch (reason) {
-      setError(errorMessage(reason, "No se pudo crear el usuario"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <section className="reference-panel">
       <div className="reference-heading">
         <h1>Configuración</h1>
-        <p>Administra integrantes del equipo y sus permisos.</p>
+        <p>Integrantes del equipo y sus permisos.</p>
       </div>
       {error && <div className="notice error">{error}</div>}
-      {message && <div className="notice success">{message}</div>}
       <div className="management-layout">
         <div className="table-card">
           <table>
@@ -83,24 +58,18 @@ export function TeamPanel({ actor }: { actor: User }) {
             </tbody>
           </table>
         </div>
-        <form className="feature-card" onSubmit={create}>
+        <article className="feature-card">
           <h3>Agregar integrante</h3>
-          <label>Nombre</label>
-          <input name="name" required minLength={2} />
-          <label>Correo</label>
-          <input name="email" type="email" required />
-          <label>Contraseña temporal</label>
-          <input name="password" type="password" minLength={10} required />
-          <label>Rol</label>
-          <select name="role" required>
-            <option value="EMPLOYEE">Empleado</option>
-            <option value="SUPERVISOR">Supervisor</option>
-            {actor.role === "ADMIN" && <option value="ADMIN">Administrador</option>}
-          </select>
-          <button className="primary-button" disabled={busy}>
-            {busy ? "Creando…" : "Crear usuario"}
-          </button>
-        </form>
+          <p className="muted">
+            Asignar un rol requiere una credencial que el navegador nunca debe tener, así que
+            esto ya no se hace desde aquí. Pide a quien administre el proyecto de Firebase que
+            corra, desde una terminal:
+          </p>
+          <p>
+            <code>npm run create-staff -- --name "Nombre" --email correo@soulbrew.com --role EMPLOYEE</code>
+          </p>
+          <p className="muted">La nueva persona aparecerá en esta lista en cuanto se cree.</p>
+        </article>
       </div>
     </section>
   );

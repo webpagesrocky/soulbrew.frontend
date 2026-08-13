@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { subscribeOrders } from "../../api/collections";
-import { cancelOrder, errorMessage, payOrder } from "../../api/functions";
+import { errorMessage } from "../../api/errors";
+import { cancelOrder, payOrder } from "../../api/transactions";
 import type { Order, OrderStatus, PaymentMethod, User } from "../../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -34,7 +35,7 @@ export function OrdersPanel({ user }: { user: User }) {
   async function pay(id: string, paymentMethod: PaymentMethod) {
     setBusy(id);
     try {
-      await payOrder({ orderId: id, paymentMethod });
+      await payOrder(id, paymentMethod, { uid: user.id, name: user.name });
     } catch (reason) {
       setError(errorMessage(reason, "No se pudo cobrar la orden"));
     } finally {
@@ -47,7 +48,7 @@ export function OrdersPanel({ user }: { user: User }) {
     if (!reason) return;
     setBusy(id);
     try {
-      await cancelOrder({ orderId: id, reason });
+      await cancelOrder(id, reason, { uid: user.id, name: user.name });
     } catch (cause) {
       setError(errorMessage(cause, "No se pudo cancelar la orden"));
     } finally {

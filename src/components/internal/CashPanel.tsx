@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { subscribeCashSessions } from "../../api/collections";
-import { closeCashSession, errorMessage, openCashSession } from "../../api/functions";
+import { errorMessage } from "../../api/errors";
+import { closeCashSession, openCashSession } from "../../api/transactions";
 import type { CashSession, User } from "../../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -37,15 +38,12 @@ export function CashPanel({ user }: { user: User }) {
     setError("");
     try {
       if (current) {
-        const result = await closeCashSession({
-          sessionId: current.id,
-          closingAmount: Number(amount),
-        });
+        const result = await closeCashSession(current.id, Number(amount));
         setSummary(
           `Corte cerrado. Esperado: ${money.format(result.expectedAmount)} · Diferencia: ${money.format(result.differenceAmount)}`,
         );
       } else {
-        await openCashSession({ openingAmount: Number(amount) });
+        await openCashSession(Number(amount), { uid: user.id, name: user.name });
         setSummary("");
       }
       setAmount("");

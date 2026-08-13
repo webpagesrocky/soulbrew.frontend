@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createProduct, subscribeProducts } from "../../api/collections";
-import { adjustInventory, errorMessage } from "../../api/functions";
+import { errorMessage } from "../../api/errors";
+import { adjustInventory } from "../../api/transactions";
 import type { Product, ProductCategory, User } from "../../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -64,11 +65,12 @@ export function CatalogPanel({ user }: { user: User }) {
     const form = event.currentTarget;
     const data = new FormData(form);
     try {
-      await adjustInventory({
-        productId: String(data.get("productId")),
-        quantityChange: Number(data.get("quantityChange")),
-        reason: String(data.get("reason")),
-      });
+      await adjustInventory(
+        String(data.get("productId")),
+        Number(data.get("quantityChange")),
+        String(data.get("reason")),
+        { uid: user.id, name: user.name },
+      );
       form.reset();
       setMessage("Inventario ajustado y movimiento registrado.");
     } catch (reason) {

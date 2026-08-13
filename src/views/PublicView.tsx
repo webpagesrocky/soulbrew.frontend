@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { subscribePublicProducts } from "../api/collections";
-import { createPublicOrder, errorMessage } from "../api/functions";
+import { errorMessage } from "../api/errors";
+import { createPublicOrder } from "../api/transactions";
 import { Icon } from "../components/Icon";
 import type { Product, ProductCategory } from "../types";
 
