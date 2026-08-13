@@ -15,16 +15,6 @@ const CATEGORIES: { value: ProductCategory; label: string; art: string }[] = [
   { value: "TONICOS", label: "Tónicos", art: "🌿" },
 ];
 
-const HOURS = [
-  { day: "Lunes", value: "08:00 – 20:00" },
-  { day: "Martes", value: "08:00 – 20:00" },
-  { day: "Miércoles", value: "08:00 – 20:00" },
-  { day: "Jueves", value: "08:00 – 20:00" },
-  { day: "Viernes", value: "08:00 – 21:00" },
-  { day: "Sábado", value: "09:00 – 21:00" },
-  { day: "Domingo", value: "09:00 – 18:00" },
-];
-
 export function PublicView() {
   const [products, setProducts] = useState<Product[]>([]);
   const [category, setCategory] = useState<ProductCategory>("MATCHA");
@@ -109,7 +99,7 @@ export function PublicView() {
       <section className="sb-hero">
         <p className="sb-eyebrow">Bienvenido a</p>
         <h1>Soul Brew</h1>
-        <p className="sb-hero-sub">Café de especialidad y matcha con alma, en el corazón de Mexicali.</p>
+        <p className="sb-hero-sub">Café de especialidad y matcha.</p>
         <div className="sb-hero-actions">
           <a href="#menu" className="sb-btn sb-btn-light">Ver menú</a>
           <a href="#menu" className="sb-btn sb-btn-outline">Ordenar</a>
@@ -182,7 +172,7 @@ export function PublicView() {
 
       <section className="sb-follow" id="follow">
         <p className="sb-eyebrow">Síguenos</p>
-        <a className="sb-social" href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram de Soul Brew">
+        <a className="sb-social" href="https://www.instagram.com/soulbrewmxl/?hl=es" target="_blank" rel="noreferrer" aria-label="Instagram de Soul Brew">
           <Icon name="instagram" size={20} />
         </a>
       </section>
@@ -196,17 +186,10 @@ export function PublicView() {
             Ver ubicación en el mapa
           </a>
         </div>
-        <div>
-          <strong>Horario</strong>
-          <div className="sb-hours">
-            {HOURS.map((row) => (
-              <div key={row.day}><span>{row.day}</span><span>{row.value}</span></div>
-            ))}
-          </div>
-        </div>
         <div className="sb-footer-links">
           <strong>Soul Brew</strong>
           <a href="#menu">Menú</a>
+          <a href="https://www.instagram.com/soulbrewmxl/?hl=es" target="_blank" rel="noreferrer">Instagram</a>
           <Link to="/login">Acceso administrador</Link>
         </div>
         <p className="sb-copy">© {new Date().getFullYear()} Soul Brew. Todos los derechos reservados.</p>
