@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { errorMessage } from "../api/functions";
+import { errorMessage } from "../api/errors";
 import { useAuth } from "../auth/AuthContext";
 
 export function LoginView() {

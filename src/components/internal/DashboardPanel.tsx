@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { subscribeOrders } from "../../api/collections";
-import { errorMessage } from "../../api/functions";
+import { errorMessage } from "../../api/errors";
 import type { Order } from "../../types";
 import { Icon } from "../Icon";
 

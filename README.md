@@ -19,8 +19,14 @@ Las **lecturas** son suscripciones en vivo a Firestore (`src/api/collections.ts`
 Los paneles se actualizan solos: si entra una orden del menú público o se agota
 un producto, la pantalla lo refleja sin recargar.
 
-Las **escrituras que mueven dinero o inventario** son llamadas a Cloud Functions
-(`src/api/functions.ts`). El navegador nunca calcula totales ni descuenta stock.
+Las **escrituras que mueven dinero o inventario** (`src/api/transactions.ts`)
+son transacciones de Firestore que corren aquí mismo, en el navegador —no hay
+Cloud Functions desplegadas (proyecto en plan Spark/gratuito). Quien realmente
+garantiza que nadie manipule precios o stock son las reglas de Firestore
+(`firestore.rules` en `soulbrew.backend`), que se aplican del lado de Google
+sin importar qué código haga la escritura. Por diseño, el menú público sólo
+puede crear una orden pendiente: el inventario se reserva hasta que personal
+autenticado la cobra, nunca al momento de ordenar.
 
 La sesión la mantiene el SDK de Firebase; el rol viaja en los *custom claims*
 del token y `AuthContext` lo lee de ahí. No se guarda nada en `localStorage` a

@@ -1,15 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { subscribeCashSessions } from "../../api/collections";
-import { closeCashSession, errorMessage, openCashSession } from "../../api/functions";
-import type { CashSession, User } from "../../types";
+import { errorMessage } from "../../api/errors";
+import { closeCashSession, openCashSession } from "../../api/transactions";
+import type { CashSession, CashTotals, User } from "../../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+
+interface ClosingReport {
+  userName: string;
+  openedAt: Date | null;
+  closedAt: Date;
+  openingAmount: number;
+  closingAmount: number;
+  expectedAmount: number;
+  differenceAmount: number;
+  totals: CashTotals;
+}
 
 export function CashPanel({ user }: { user: User }) {
   const [sessions, setSessions] = useState<CashSession[]>([]);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
-  const [summary, setSummary] = useState("");
+  const [report, setReport] = useState<ClosingReport | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(
@@ -37,16 +49,19 @@ export function CashPanel({ user }: { user: User }) {
     setError("");
     try {
       if (current) {
-        const result = await closeCashSession({
-          sessionId: current.id,
-          closingAmount: Number(amount),
+        const result = await closeCashSession(current.id, Number(amount));
+        setReport({
+          userName: current.userName,
+          openedAt: current.openedAt,
+          closedAt: new Date(),
+          openingAmount: result.openingAmount,
+          closingAmount: result.closingAmount,
+          expectedAmount: result.expectedAmount,
+          differenceAmount: result.differenceAmount,
+          totals: result.totals,
         });
-        setSummary(
-          `Corte cerrado. Esperado: ${money.format(result.expectedAmount)} · Diferencia: ${money.format(result.differenceAmount)}`,
-        );
       } else {
-        await openCashSession({ openingAmount: Number(amount) });
-        setSummary("");
+        await openCashSession(Number(amount), { uid: user.id, name: user.name });
       }
       setAmount("");
     } catch (reason) {
@@ -65,7 +80,6 @@ export function CashPanel({ user }: { user: User }) {
         <p>Administra turnos, cobros y diferencias de efectivo.</p>
       </div>
       {error && <div className="notice error">{error}</div>}
-      {summary && <div className="notice success">{summary}</div>}
       <div className="cash-layout">
         <article className="feature-card dark-card">
           <p className="eyebrow">Caja actual</p>
@@ -125,6 +139,47 @@ export function CashPanel({ user }: { user: User }) {
           </div>
         </article>
       </div>
+
+      {report && (
+        <div className="cash-report-backdrop" onClick={() => setReport(null)}>
+          <div className="cash-report" onClick={(event) => event.stopPropagation()}>
+            <div className="cash-report-head">
+              <p className="eyebrow">Reporte de cierre</p>
+              <h2>Corte de caja</h2>
+              <p>
+                {report.userName} · abrió{" "}
+                {report.openedAt ? report.openedAt.toLocaleString("es-MX") : "—"}
+                <br />
+                cerró {report.closedAt.toLocaleString("es-MX")}
+              </p>
+            </div>
+
+            <p className="cash-report-section">Cajón de efectivo</p>
+            <div className="cash-report-row"><span>Fondo inicial</span><span>{money.format(report.openingAmount)}</span></div>
+            <div className="cash-report-row"><span>Cobros en efectivo</span><span>{money.format(report.totals.cashTotal)}</span></div>
+            <div className="cash-report-row"><span>Efectivo esperado</span><span>{money.format(report.expectedAmount)}</span></div>
+            <div className="cash-report-row"><span>Efectivo contado</span><span>{money.format(report.closingAmount)}</span></div>
+            <div className={`cash-report-row cash-report-diff ${report.differenceAmount === 0 ? "zero" : report.differenceAmount > 0 ? "positive" : "negative"}`}>
+              <span>Descuadre</span>
+              <span>
+                {report.differenceAmount > 0 ? "+" : ""}
+                {money.format(report.differenceAmount)}
+              </span>
+            </div>
+
+            <p className="cash-report-section">Resumen de ventas</p>
+            <div className="cash-report-row"><span>Ventas ({report.totals.saleCount})</span><span>{money.format(report.totals.salesTotal)}</span></div>
+            <div className="cash-report-row"><span>Efectivo</span><span>{money.format(report.totals.cashTotal)}</span></div>
+            <div className="cash-report-row"><span>Tarjeta</span><span>{money.format(report.totals.cardTotal)}</span></div>
+            <div className="cash-report-row"><span>Transferencia</span><span>{money.format(report.totals.transferTotal)}</span></div>
+
+            <div className="cash-report-actions">
+              <button className="reference-primary" onClick={() => window.print()}>Imprimir</button>
+              <button onClick={() => setReport(null)}>Listo</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
