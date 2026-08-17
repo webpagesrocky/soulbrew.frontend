@@ -1,24 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { subscribePublicProducts } from "../api/collections";
+import { subscribeCategories, subscribePublicProducts } from "../api/collections";
 import { errorMessage } from "../api/errors";
 import { createPublicOrder } from "../api/transactions";
 import { Icon } from "../components/Icon";
-import type { Product, ProductCategory } from "../types";
+import type { Category, Product, ProductCategory } from "../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
-const CATEGORIES: { value: ProductCategory; label: string; art: string }[] = [
-  { value: "MATCHA", label: "Matcha", art: "🍵" },
-  { value: "CAFE", label: "Café", art: "☕" },
-  { value: "CHAI", label: "Chai", art: "🫖" },
-  { value: "REFRESHER", label: "Refresher", art: "🥤" },
-  { value: "TONICOS", label: "Tónicos", art: "🌿" },
-];
-
 export function PublicView() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [category, setCategory] = useState<ProductCategory>("MATCHA");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [category, setCategory] = useState<ProductCategory | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [customerName, setCustomerName] = useState("");
   const [message, setMessage] = useState("");
@@ -44,6 +37,25 @@ export function PublicView() {
     [],
   );
 
+  useEffect(
+    () =>
+      subscribeCategories(
+        (rows) => setCategories(rows.filter((item) => item.active)),
+        (reason) => setError(errorMessage(reason, "No pudimos cargar las categorías")),
+      ),
+    [],
+  );
+
+  // La primera categoría se elige sola en cuanto llegan: cuáles existen ya no
+  // se sabe hasta que Firestore responde.
+  useEffect(() => {
+    setCategory((current) => {
+      if (current && categories.some((item) => item.id === current)) return current;
+      return categories[0]?.id ?? null;
+    });
+  }, [categories]);
+
+  const activeCategory = categories.find((item) => item.id === category) ?? null;
   const categoryProducts = products.filter((product) => product.category === category);
   const selections = products.filter((product) => cart[product.id]);
   const itemCount = selections.reduce((sum, product) => sum + (cart[product.id] ?? 0), 0);
@@ -56,6 +68,14 @@ export function PublicView() {
     setCart((current) => {
       const next = Math.max(0, Math.min(product.stock, (current[product.id] ?? 0) + difference));
       return { ...current, [product.id]: next };
+    });
+  }
+
+  function removeFromCart(product: Product) {
+    setCart((current) => {
+      const next = { ...current };
+      delete next[product.id];
+      return next;
     });
   }
 
@@ -115,13 +135,13 @@ export function PublicView() {
         <h2>Elige tu categoría</h2>
 
         <div className="sb-pills">
-          {CATEGORIES.map((item) => (
+          {categories.map((item) => (
             <button
-              key={item.value}
-              className={category === item.value ? "active" : ""}
-              onClick={() => setCategory(item.value)}
+              key={item.id}
+              className={category === item.id ? "active" : ""}
+              onClick={() => setCategory(item.id)}
             >
-              {item.label}
+              {item.name}
             </button>
           ))}
         </div>
@@ -135,7 +155,11 @@ export function PublicView() {
               return (
                 <article className={`sb-product-card ${product.stock === 0 ? "sold-out" : ""}`} key={product.id}>
                   <div className="sb-product-art">
-                    {CATEGORIES.find((item) => item.value === product.category)?.art}
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.name} loading="lazy" />
+                    ) : (
+                      (activeCategory?.emoji ?? "☕")
+                    )}
                     {product.stock > 0 && (
                       <button
                         className="sb-add-btn"
@@ -213,12 +237,43 @@ export function PublicView() {
               <button onClick={() => setCartOpen(false)} aria-label="Cerrar">✕</button>
             </div>
             <div className="sb-drawer-lines">
-              {selections.map((product) => (
-                <div className="sb-drawer-line" key={product.id}>
-                  <span>{cart[product.id]} × {product.name}</span>
-                  <strong>{money.format(product.price * cart[product.id])}</strong>
-                </div>
-              ))}
+              {selections.map((product) => {
+                const quantity = cart[product.id]!;
+                return (
+                  <div className="sb-drawer-line" key={product.id}>
+                    <div className="sb-drawer-line-info">
+                      <strong>{product.name}</strong>
+                      <small>{money.format(product.price)} c/u</small>
+                    </div>
+                    <button
+                      className="sb-drawer-remove"
+                      onClick={() => removeFromCart(product)}
+                      aria-label={`Quitar ${product.name} de la orden`}
+                    >
+                      ✕
+                    </button>
+                    <div className="sb-qty">
+                      <button
+                        onClick={() => changeQuantity(product, -1)}
+                        aria-label={`Una unidad menos de ${product.name}`}
+                      >
+                        −
+                      </button>
+                      <span>{quantity}</span>
+                      <button
+                        onClick={() => changeQuantity(product, 1)}
+                        disabled={quantity >= product.stock}
+                        aria-label={`Una unidad más de ${product.name}`}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <strong className="sb-drawer-line-total">
+                      {money.format(product.price * quantity)}
+                    </strong>
+                  </div>
+                );
+              })}
               {!selections.length && <p className="muted">Aún no eliges nada.</p>}
             </div>
             <div className="sb-drawer-total"><span>Total</span><strong>{money.format(total)}</strong></div>
