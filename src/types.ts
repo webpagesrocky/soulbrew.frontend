@@ -1,7 +1,17 @@
 export type Role = "ADMIN" | "SUPERVISOR" | "EMPLOYEE";
 export type PaymentMethod = "CASH" | "CARD" | "TRANSFER";
 export type OrderStatus = "PENDING" | "PAID" | "CANCELLED";
-export type ProductCategory = "MATCHA" | "CAFE" | "CHAI" | "REFRESHER" | "TONICOS";
+
+/** Id del documento en `categories`. Ya no es una lista fija. */
+export type ProductCategory = string;
+
+export interface Category {
+  id: ProductCategory;
+  name: string;
+  emoji: string;
+  order: number;
+  active: boolean;
+}
 
 export interface User {
   id: string;
@@ -17,6 +27,8 @@ export interface Product {
   name: string;
   description: string | null;
   category: ProductCategory;
+  /** data URI comprimido o URL externa; null si no tiene foto. */
+  imageUrl: string | null;
   price: number;
   stock: number;
   active: boolean;

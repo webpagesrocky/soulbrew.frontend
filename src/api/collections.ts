@@ -1,12 +1,14 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   Timestamp,
   updateDoc,
   where,
@@ -17,6 +19,7 @@ import {
 import { db } from "../firebase";
 import type {
   CashSession,
+  Category,
   InventoryMovement,
   Order,
   OrderStatus,
@@ -46,8 +49,20 @@ function toProduct(snapshot: Snapshot): Product {
     name: data.name,
     description: data.description ?? null,
     category: data.category as ProductCategory,
+    imageUrl: data.imageUrl ?? null,
     price: data.price,
     stock: data.stock,
+    active: Boolean(data.active),
+  };
+}
+
+function toCategory(snapshot: Snapshot): Category {
+  const data = snapshot.data();
+  return {
+    id: snapshot.id,
+    name: data.name,
+    emoji: data.emoji ?? "",
+    order: data.order ?? 0,
     active: Boolean(data.active),
   };
 }
@@ -204,10 +219,56 @@ export function subscribeInventoryMovements(
   );
 }
 
+/** Categorías del menú. Lectura pública: el menú las necesita sin sesión. */
+export function subscribeCategories(
+  onData: (categories: Category[]) => void,
+  onError: (error: Error) => void,
+) {
+  return subscribe("categories", [orderBy("order")], toCategory, onData, onError);
+}
+
+export interface CategoryInput {
+  name: string;
+  emoji: string;
+  order: number;
+  active: boolean;
+}
+
+/**
+ * El id se deriva del nombre porque es lo que queda guardado en cada producto:
+ * un id legible hace que los datos se puedan leer sin cruzar colecciones.
+ */
+export function categoryId(name: string): string {
+  const withoutAccents = [...name.normalize("NFD")]
+    .filter((char) => {
+      const code = char.charCodeAt(0);
+      // Descarta los diacríticos combinantes que deja NFD (café -> cafe).
+      return code < 0x300 || code > 0x36f;
+    })
+    .join("");
+  return withoutAccents
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+export async function createCategory(id: string, input: CategoryInput) {
+  await setDoc(doc(db, "categories", id), input);
+}
+
+export async function updateCategory(id: string, input: CategoryInput) {
+  await setDoc(doc(db, "categories", id), input);
+}
+
+export async function deleteCategory(id: string) {
+  await deleteDoc(doc(db, "categories", id));
+}
+
 export interface ProductInput {
   name: string;
   description: string | null;
   category: ProductCategory;
+  imageUrl: string | null;
   price: number;
 }
 
