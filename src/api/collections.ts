@@ -290,3 +290,13 @@ export async function createProduct(input: ProductInput) {
 export async function updateProduct(id: string, input: ProductInput & { active: boolean }) {
   await updateDoc(doc(db, "products", id), { ...input, updatedAt: serverTimestamp() });
 }
+
+/**
+ * Borrado definitivo. Las órdenes pasadas conservan su renglón (guardan nombre
+ * y precio propios), pero una venta ya pagada de este producto ya no se podrá
+ * cancelar: devolver el stock necesita leer el documento que aquí se elimina.
+ * Para retirar algo del menú de forma reversible, usa `active: false`.
+ */
+export async function deleteProduct(id: string) {
+  await deleteDoc(doc(db, "products", id));
+}

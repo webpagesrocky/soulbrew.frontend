@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { updateProduct } from "../../api/collections";
+import { deleteProduct, updateProduct } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
 import { approximateKb, compressImage } from "../../api/image";
 import type { Category, Product } from "../../types";
@@ -48,6 +48,28 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
       onClose();
     } catch (reason) {
       onError(errorMessage(reason, "No se pudo actualizar el producto"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    const confirmed = window.confirm(
+      `¿Eliminar "${product.name}" definitivamente?\n\n` +
+        "Las ventas ya registradas conservan su renglón, pero si este producto " +
+        "aparece en una venta pagada, esa venta ya no se podrá cancelar.\n\n" +
+        "Si sólo quieres retirarlo del menú, cancela y desmarca " +
+        '"Visible en el menú público": eso es reversible.',
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      await deleteProduct(product.id);
+      onSaved(`"${product.name}" eliminado.`);
+      onClose();
+    } catch (reason) {
+      onError(errorMessage(reason, "No se pudo eliminar el producto"));
     } finally {
       setBusy(false);
     }
@@ -136,6 +158,15 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
           <button className="reference-primary" disabled={busy || imageBusy}>
             {busy ? "Guardando…" : "Guardar cambios"}
           </button>
+        </div>
+
+        <div className="editor-danger">
+          <button type="button" onClick={() => void remove()} disabled={busy}>
+            Eliminar producto
+          </button>
+          <small>
+            Para retirarlo del menú sin perderlo, mejor desmarca “Visible en el menú público”.
+          </small>
         </div>
       </form>
     </div>

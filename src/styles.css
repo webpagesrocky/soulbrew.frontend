@@ -620,6 +620,10 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .editor-note { margin: 12px 0 0; padding: 9px 11px; border-radius: 8px; background: #faf7f3; color: #8a6a52; font-size: 11px; line-height: 1.5; }
 .editor-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; margin-top: 18px; }
 .editor-actions button:first-child { border: 1px solid #ddcabb; border-radius: 8px; background: transparent; color: #67442f; font-size: 12px; font-weight: 750; }
+.editor-danger { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--ref-border); text-align: center; }
+.editor-danger button { border: 1px solid #e6c4b8; border-radius: 8px; background: transparent; padding: 8px 14px; color: #b2452a; font-size: 12px; font-weight: 750; }
+.editor-danger button:hover:enabled { background: #fdf1ed; border-color: #b2452a; }
+.editor-danger small { display: block; margin-top: 8px; color: #9b765c; font-size: 10px; line-height: 1.5; }
 
 /* Gestión de categorías */
 .category-list { display: grid; gap: 4px; margin-bottom: 12px; }
