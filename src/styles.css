@@ -89,11 +89,17 @@ small { color: #6d746e; }
 .sb-product-grid { display: grid; grid-template-columns: 1fr; gap: 1.1rem; max-width: 640px; margin: 0 auto; text-align: left; }
 .sb-product-card { background: #fff; border: 1px solid var(--sb-line); border-radius: 16px; overflow: hidden; box-shadow: 0 8px 20px rgba(43,22,13,.06); }
 .sb-product-card.sold-out { opacity: .55; }
-.sb-product-art { position: relative; height: 150px; display: grid; place-items: center; background: linear-gradient(150deg, #e9e2d6, #d8cfc0); font-size: 3.4rem; overflow: hidden; }
+/* La foto manda: proporción fija 3:2, la misma que usa el ajustador del panel,
+   para que lo encuadrado sea exactamente lo que se ve aquí. */
+.sb-product-art { position: relative; aspect-ratio: 3 / 2; display: grid; place-items: center; background: linear-gradient(150deg, #e9e2d6, #d8cfc0); font-size: 3.4rem; }
 .sb-product-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.sb-add-btn { position: absolute; right: .7rem; bottom: -1rem; width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 1px solid var(--sb-line); background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,.12); font-size: 1.2rem; font-weight: 700; color: var(--sb-brown); display: grid; place-items: center; }
+/* El botón vive en el cuerpo, no sobre la foto: antes tapaba una esquina y
+   además quedaba recortado por el overflow del recuadro. */
+.sb-add-btn { position: absolute; right: .7rem; top: calc(100% + .5rem); width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 1px solid var(--sb-line); background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,.12); font-size: 1.2rem; font-weight: 700; color: var(--sb-brown); display: grid; place-items: center; z-index: 1; }
 .sb-add-btn:disabled { opacity: .4; }
-.sb-product-body { padding: 1.5rem 1.1rem 1.1rem; }
+/* El padding superior reserva la banda donde flota el "+", para que no pise
+   ni la foto ni el título. */
+.sb-product-body { padding: 3.4rem 1.1rem 1.1rem; }
 .sb-product-row { display: flex; justify-content: space-between; align-items: start; gap: .6rem; }
 .sb-product-row h3 { margin: 0; font-family: Georgia, serif; font-weight: 500; font-size: 1.05rem; }
 .sb-product-row strong { color: var(--sb-price); white-space: nowrap; }
@@ -607,6 +613,18 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .image-preview { display: grid; grid-template-columns: 64px 1fr; gap: 11px; align-items: center; padding: 9px; border: 1px solid var(--ref-border); border-radius: 8px; }
 .image-preview img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; }
 .image-preview button { border: 0; background: transparent; padding: 4px 0 0; color: #b26c55; font-size: 11px; font-weight: 700; text-decoration: underline; }
+
+/* Ajustador de foto */
+.adjuster-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 1.25rem; background: rgba(20,12,6,.62); }
+.adjuster-card { width: min(420px, 100%); background: #fff; border-radius: 14px; padding: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.35); }
+.adjuster-hint { margin: 0 0 11px; color: #8a6a52; font-size: 11px; }
+.adjuster-viewport { position: relative; width: 100%; overflow: hidden; border-radius: 10px; background: #2c1c12; cursor: grab; touch-action: none; display: grid; place-items: center; }
+.adjuster-viewport:active { cursor: grabbing; }
+.adjuster-viewport img { position: absolute; max-width: none; user-select: none; -webkit-user-drag: none; }
+.adjuster-loading { color: #d9cfc4; font-size: 12px; }
+.adjuster-zoom { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 11px; margin: 14px 0 0; text-transform: none; letter-spacing: 0; font-size: 11px; color: #8a6a52; }
+.adjuster-zoom input { width: 100%; margin: 0; padding: 0; border: 0; background: transparent; accent-color: var(--ref-brown); }
+.image-preview-actions { display: flex; gap: 10px; }
 
 /* Editor de producto */
 .editor-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 1.25rem; background: rgba(30,18,10,.5); overflow-y: auto; }
