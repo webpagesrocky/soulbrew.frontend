@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { updateProduct } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
-import { approximateKb, compressImage } from "../../api/image";
 import type { Category, Product } from "../../types";
+import { ImageField } from "./ImageField";
 
 interface Props {
   product: Product;
@@ -14,22 +14,7 @@ interface Props {
 
 export function ProductEditor({ product, categories, onClose, onSaved, onError }: Props) {
   const [image, setImage] = useState<string | null>(product.imageUrl);
-  const [imageBusy, setImageBusy] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  async function pickImage(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setImageBusy(true);
-    try {
-      setImage(await compressImage(file));
-    } catch (reason) {
-      onError(errorMessage(reason, "No se pudo procesar la imagen"));
-    } finally {
-      setImageBusy(false);
-      event.target.value = "";
-    }
-  }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -98,26 +83,7 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
         />
 
         <label>Imagen</label>
-        <div className="image-picker">
-          {image ? (
-            <div className="image-preview">
-              <img src={image} alt="Vista previa" />
-              <div>
-                <small>
-                  {image.startsWith("data:") ? `${approximateKb(image)} KB` : "URL externa"}
-                </small>
-                <button type="button" onClick={() => setImage(null)}>
-                  Quitar imagen
-                </button>
-              </div>
-            </div>
-          ) : (
-            <label className="image-drop">
-              <input type="file" accept="image/*" onChange={pickImage} disabled={imageBusy} />
-              <span>{imageBusy ? "Procesando…" : "Subir foto"}</span>
-            </label>
-          )}
-        </div>
+        <ImageField value={image} onChange={setImage} onError={onError} />
 
         <label className="editor-check">
           <input type="checkbox" name="active" defaultChecked={product.active} />
@@ -133,7 +99,7 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
           <button type="button" onClick={onClose} disabled={busy}>
             Cancelar
           </button>
-          <button className="reference-primary" disabled={busy || imageBusy}>
+          <button className="reference-primary" disabled={busy}>
             {busy ? "Guardando…" : "Guardar cambios"}
           </button>
         </div>

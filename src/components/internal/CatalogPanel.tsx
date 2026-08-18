@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { createProduct, subscribeCategories, subscribeProducts } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
-import { approximateKb, compressImage } from "../../api/image";
 import { adjustInventory } from "../../api/transactions";
 import type { Category, Product, User } from "../../types";
 import { CategoryManager } from "./CategoryManager";
+import { ImageField } from "./ImageField";
 import { ProductEditor } from "./ProductEditor";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -16,7 +16,6 @@ export function CatalogPanel({ user }: { user: User }) {
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState<"ALL" | "AVAILABLE" | "SOLD_OUT">("ALL");
   const [image, setImage] = useState<string | null>(null);
-  const [imageBusy, setImageBusy] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
 
   useEffect(
@@ -54,21 +53,6 @@ export function CatalogPanel({ user }: { user: User }) {
       }),
     [filter, products],
   );
-
-  async function pickImage(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setImageBusy(true);
-    setError("");
-    try {
-      setImage(await compressImage(file));
-    } catch (reason) {
-      setError(errorMessage(reason, "No se pudo procesar la imagen"));
-    } finally {
-      setImageBusy(false);
-      event.target.value = "";
-    }
-  }
 
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -136,27 +120,7 @@ export function CatalogPanel({ user }: { user: User }) {
               ))}
             </select>
 
-            <div className="image-picker">
-              {image ? (
-                <div className="image-preview">
-                  <img src={image} alt="Vista previa" />
-                  <div>
-                    <small>Imagen lista · {approximateKb(image)} KB</small>
-                    <button type="button" onClick={() => setImage(null)}>
-                      Quitar
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <label className="image-drop">
-                    <input type="file" accept="image/*" onChange={pickImage} disabled={imageBusy} />
-                    <span>{imageBusy ? "Procesando…" : "Subir foto"}</span>
-                  </label>
-                  <input name="imageUrl" placeholder="…o pega una URL de imagen" type="url" />
-                </>
-              )}
-            </div>
+            <ImageField value={image} onChange={setImage} onError={setError} allowUrl />
 
             <div className="inline-form">
               <input
@@ -167,9 +131,7 @@ export function CatalogPanel({ user }: { user: User }) {
                 step="0.01"
                 required
               />
-              <button className="reference-primary" disabled={imageBusy}>
-                + Agregar
-              </button>
+              <button className="reference-primary">+ Agregar</button>
             </div>
           </form>
 
