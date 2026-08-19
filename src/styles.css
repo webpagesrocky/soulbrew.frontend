@@ -68,9 +68,11 @@ small { color: #6d746e; }
 .sb-hero { padding: 3rem 1.25rem 3.5rem; text-align: center; color: #fff; background: radial-gradient(130% 100% at 50% -15%, var(--sb-brown) 0%, var(--sb-brown-deep) 55%, var(--sb-cream) 100%); }
 .sb-hero .sb-eyebrow { color: var(--sb-tan); }
 .sb-hero h1 { font-family: Georgia, serif; font-weight: 500; font-size: clamp(2.6rem, 12vw, 3.6rem); letter-spacing: -.03em; margin: .4rem 0 1rem; line-height: 1; }
-/* El logo viene sobre fondo blanco; sobre el hero oscuro se aísla en una
-   tarjeta clara en vez de intentar recortarle el fondo. */
-.sb-hero-logo { display: block; width: min(280px, 68vw); margin: .4rem auto 1.25rem; padding: 1rem 1.25rem; border-radius: 14px; background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.22); }
+/* El archivo del logo trae fondo negro. `screen` hace que el negro puro no
+   aporte nada sobre el hero oscuro —queda transparente de facto— sin tener que
+   recortar la imagen. Si algún día subes un PNG con transparencia real, esto
+   sigue funcionando igual. */
+.sb-hero-logo { display: block; width: min(300px, 72vw); margin: .2rem auto 1.25rem; mix-blend-mode: screen; }
 .sb-hero-sub { max-width: 26rem; margin: 0 auto 1.75rem; color: #d8cabf; font-size: 1rem; line-height: 1.55; }
 .sb-hero-actions { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
 .sb-btn { padding: .85rem 1.6rem; border-radius: 99px; font-size: .82rem; font-weight: 750; }
@@ -641,7 +643,9 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .editor-card label { margin: 12px 0 5px; font-size: 11px; color: #8a6a52; }
 .editor-check { display: flex; align-items: center; gap: 9px; margin-top: 14px; text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 650; color: #4a3527; }
 .editor-check input { width: auto; margin: 0; }
-.editor-note { margin: 12px 0 0; padding: 9px 11px; border-radius: 8px; background: #faf7f3; color: #8a6a52; font-size: 11px; line-height: 1.5; }
+/* `display:block` es obligatorio: como <small> es inline, el padding no
+   envolvía el texto y se salía del recuadro. */
+.editor-note { display: block; margin: 12px 0 0; padding: 9px 11px; border-radius: 8px; background: #faf7f3; color: #8a6a52; font-size: 11px; line-height: 1.5; }
 .editor-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; margin-top: 18px; }
 .editor-actions button:first-child { border: 1px solid #ddcabb; border-radius: 8px; background: transparent; color: #67442f; font-size: 12px; font-weight: 750; }
 /* Merma en el cierre de turno */
@@ -675,6 +679,13 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .history-order small { display: block; color: #9b765c; font-size: 11px; }
 
 /* Reportes */
+/* `.reference-card` sólo trae borde y fondo; el padding lo ponía cada bloque.
+   Las tarjetas sueltas del reporte se quedaban sin él y el texto tocaba el
+   borde, así que aquí se les da uno propio. */
+.reference-panel > .reference-card,
+.inventory-grid > .reference-card { padding: 20px 19px; }
+.reference-panel > .reference-card + .reference-card { margin-top: 18px; }
+
 .report-table { margin-top: 14px; overflow-x: auto; }
 .report-head, .report-row { display: grid; grid-template-columns: minmax(0, 2fr) repeat(4, minmax(56px, 1fr)); gap: 10px; align-items: center; padding: 8px 0; }
 .report-head { color: #8b654d; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; border-bottom: 1px solid var(--ref-border); }
@@ -698,6 +709,14 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .inventory-metrics { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
 .inventory-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 18px; align-items: start; margin-bottom: 20px; }
 .stock-head { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(60px, 1fr)); }
+.supply-head { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(58px, 1fr)) auto; }
+.supply-off { color: #b2452a; font-size: 10px; }
+.supply-forms { display: grid; gap: 16px; align-content: start; }
+.supply-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.supply-inline select, .supply-inline input { margin-bottom: 9px; }
+.inventory-tabs { display: inline-flex; gap: 4px; margin-bottom: 18px; padding: 4px; border-radius: 10px; background: #f0ebe5; }
+.inventory-tabs button { border: 0; border-radius: 7px; background: transparent; padding: 7px 14px; color: #7a5c42; font-size: 12px; font-weight: 750; }
+.inventory-tabs button.active { background: var(--ref-brown); color: #fff; }
 .stock-zero { color: #b2452a; }
 .stock-in { color: #4c6b39; font-weight: 700; }
 .stock-out { color: #b2452a; font-weight: 700; }

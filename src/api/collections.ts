@@ -25,6 +25,8 @@ import type {
   OrderStatus,
   Product,
   ProductCategory,
+  Supply,
+  SupplyMovement,
   User,
 } from "../types";
 
@@ -252,6 +254,78 @@ export function subscribeInventoryMovements(
     onData,
     onError,
   );
+}
+
+function toSupply(snapshot: Snapshot): Supply {
+  const data = snapshot.data();
+  return {
+    id: snapshot.id,
+    name: data.name,
+    unit: data.unit ?? "pz",
+    stock: data.stock ?? 0,
+    cost: data.cost ?? 0,
+    minStock: data.minStock ?? 0,
+    active: Boolean(data.active),
+  };
+}
+
+function toSupplyMovement(snapshot: Snapshot): SupplyMovement {
+  const data = snapshot.data();
+  return {
+    id: snapshot.id,
+    supplyId: data.supplyId,
+    supplyName: data.supplyName,
+    unit: data.unit ?? "",
+    userId: data.userId,
+    userName: data.userName,
+    quantityChange: data.quantityChange,
+    reason: data.reason,
+    createdAt: toDate(data.createdAt),
+  };
+}
+
+/** Insumos de barra (leche, vasos…). Colección aparte de los productos del menú. */
+export function subscribeSupplies(
+  onData: (supplies: Supply[]) => void,
+  onError: (error: Error) => void,
+) {
+  return subscribe("supplies", [orderBy("name")], toSupply, onData, onError);
+}
+
+export function subscribeSupplyMovements(
+  onData: (movements: SupplyMovement[]) => void,
+  onError: (error: Error) => void,
+  from?: Date,
+) {
+  const constraints: QueryConstraint[] = from
+    ? [where("createdAt", ">=", Timestamp.fromDate(from))]
+    : [];
+  return subscribe(
+    "supplyMovements",
+    [...constraints, orderBy("createdAt", "desc"), limit(250)],
+    toSupplyMovement,
+    onData,
+    onError,
+  );
+}
+
+export interface SupplyInput {
+  name: string;
+  unit: string;
+  cost: number;
+  minStock: number;
+}
+
+export async function createSupply(input: SupplyInput) {
+  await addDoc(collection(db, "supplies"), { ...input, stock: 0, active: true });
+}
+
+export async function updateSupply(id: string, input: SupplyInput & { stock: number; active: boolean }) {
+  await setDoc(doc(db, "supplies", id), input);
+}
+
+export async function deleteSupply(id: string) {
+  await deleteDoc(doc(db, "supplies", id));
 }
 
 /** Borra un pedido. Sale del historial y del reporte; no descuadra cortes ya cerrados. */

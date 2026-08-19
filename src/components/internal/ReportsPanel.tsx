@@ -9,6 +9,7 @@ import { errorMessage } from "../../api/errors";
 import { adjustInventory } from "../../api/transactions";
 import type { InventoryMovement, Order, Product, User } from "../../types";
 import { Icon } from "../Icon";
+import { SuppliesSection } from "./SuppliesSection";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
@@ -35,6 +36,7 @@ function addDays(date: Date, days: number): Date {
  */
 export function ReportsPanel({ user }: { user: User }) {
   const [view, setView] = useState<"sales" | "inventory">("sales");
+  const [inventoryTab, setInventoryTab] = useState<"supplies" | "menu">("supplies");
   const [weekOffset, setWeekOffset] = useState(0);
   const [orders, setOrders] = useState<Order[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
@@ -313,6 +315,35 @@ export function ReportsPanel({ user }: { user: User }) {
 
       {view === "inventory" && (
         <>
+          <div className="inventory-tabs">
+            <button
+              className={inventoryTab === "supplies" ? "active" : ""}
+              onClick={() => setInventoryTab("supplies")}
+            >
+              Insumos
+            </button>
+            <button
+              className={inventoryTab === "menu" ? "active" : ""}
+              onClick={() => setInventoryTab("menu")}
+            >
+              Productos del menú
+            </button>
+          </div>
+
+          {inventoryTab === "supplies" && (
+            <SuppliesSection
+              user={user}
+              from={range.from}
+              onError={setError}
+              onMessage={(text) => {
+                setMessage(text);
+                setError("");
+              }}
+            />
+          )}
+
+          {inventoryTab === "menu" && (
+            <>
           <div className="metric-grid inventory-metrics">
             <article className="metric-card">
               <div className="metric-icon brown"><Icon name="coffee" size={22} /></div>
@@ -441,6 +472,8 @@ export function ReportsPanel({ user }: { user: User }) {
               )}
             </div>
           </article>
+            </>
+          )}
         </>
       )}
     </section>

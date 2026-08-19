@@ -81,6 +81,36 @@ export interface CashSession {
   closedAt: Date | null;
 }
 
+/**
+ * Insumo de barra: leche, vasos, jarabes. No se vende ni aparece en el menú,
+ * por eso no tiene categoría ni precio de venta. Su existencia admite
+ * decimales (2.5 L), a diferencia del stock de productos.
+ */
+export interface Supply {
+  id: string;
+  name: string;
+  /** Unidad de medida: L, kg, pz, cajas… */
+  unit: string;
+  stock: number;
+  /** Costo por unidad. */
+  cost: number;
+  /** Umbral para avisar que está por acabarse. */
+  minStock: number;
+  active: boolean;
+}
+
+export interface SupplyMovement {
+  id: string;
+  supplyId: string;
+  supplyName: string;
+  unit: string;
+  userId: string;
+  userName: string;
+  quantityChange: number;
+  reason: string;
+  createdAt: Date | null;
+}
+
 /** WASTE: merma registrada al cerrar turno. ADJUSTMENT: corrección manual. */
 export type MovementType = "WASTE" | "ADJUSTMENT";
 

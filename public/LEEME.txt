@@ -2,8 +2,9 @@ Guarda aquí el logo de Soul Brew con el nombre exacto:
 
     logo.png
 
-(o logo.svg si lo tienes vectorial — en ese caso avísame para
-cambiar la referencia en el código).
+El hero aplica mezcla "screen", así que un logo con FONDO NEGRO se ve
+como si fuera transparente sobre el fondo oscuro. Si tienes una versión
+con transparencia real (PNG o SVG), también funciona.
 
-Mientras el archivo no exista, el hero muestra el título
-"Soul Brew" en texto como respaldo, no una imagen rota.
+Mientras el archivo no exista, el hero muestra el título "Soul Brew"
+en texto como respaldo, no una imagen rota.

@@ -294,6 +294,51 @@ async function moveStock(
   });
 }
 
+/**
+ * Entrada o salida de un insumo (leche, vasos…).
+ *
+ * Ajusta la existencia y deja el movimiento en la misma transacción, para que
+ * nunca quede un cambio de stock sin explicación en la bitácora.
+ */
+export async function moveSupply(
+  supplyId: string,
+  quantityChange: number,
+  reason: string,
+  actor: Actor,
+) {
+  if (quantityChange === 0) throw new OrderError("La cantidad no puede ser cero");
+
+  const ref = doc(db, "supplies", supplyId);
+  const movementRef = doc(collection(db, "supplyMovements"));
+
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new OrderError("Insumo no encontrado");
+    const supply = snap.data() as { name: string; unit: string; stock: number };
+
+    // Se redondea a 2 decimales: sumar 0.1 repetidas veces en punto flotante
+    // deja residuos como 2.7999999999999994 en la existencia.
+    const stock = Math.round((supply.stock + quantityChange) * 100) / 100;
+    if (stock < 0) {
+      throw new OrderError(`No hay suficiente ${supply.name} en existencia`);
+    }
+
+    tx.update(ref, { stock });
+    tx.set(movementRef, {
+      supplyId,
+      supplyName: supply.name,
+      unit: supply.unit,
+      userId: actor.uid,
+      userName: actor.name,
+      quantityChange,
+      reason,
+      createdAt: serverTimestamp(),
+    });
+
+    return { supplyId, previousStock: supply.stock, stock, reason };
+  });
+}
+
 /** Corrección manual de existencias. Sólo administración. */
 export async function adjustInventory(
   productId: string,
