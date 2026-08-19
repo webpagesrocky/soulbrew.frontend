@@ -65,19 +65,20 @@ small { color: #6d746e; }
 .sb-cart-btn { position: relative; flex: 0 0 auto; width: 2.5rem; height: 2.5rem; border: 0; border-radius: 50%; background: var(--sb-brown); color: #fff; display: grid; place-items: center; }
 .sb-cart-badge { position: absolute; top: -.2rem; right: -.2rem; min-width: 1.15rem; height: 1.15rem; padding: 0 .25rem; border-radius: 99px; background: var(--sb-price); color: #fff; font-size: .62rem; font-weight: 800; display: grid; place-items: center; }
 
-.sb-hero { padding: 3rem 1.25rem 3.5rem; text-align: center; color: #fff; background: radial-gradient(130% 100% at 50% -15%, var(--sb-brown) 0%, var(--sb-brown-deep) 55%, var(--sb-cream) 100%); }
-.sb-hero .sb-eyebrow { color: var(--sb-tan); }
-.sb-hero h1 { font-family: Georgia, serif; font-weight: 500; font-size: clamp(2.6rem, 12vw, 3.6rem); letter-spacing: -.03em; margin: .4rem 0 1rem; line-height: 1; }
-/* El archivo del logo trae fondo negro. `screen` hace que el negro puro no
-   aporte nada sobre el hero oscuro —queda transparente de facto— sin tener que
-   recortar la imagen. Si algún día subes un PNG con transparencia real, esto
-   sigue funcionando igual. */
-.sb-hero-logo { display: block; width: min(300px, 72vw); margin: .2rem auto 1.25rem; mix-blend-mode: screen; }
-.sb-hero-sub { max-width: 26rem; margin: 0 auto 1.75rem; color: #d8cabf; font-size: 1rem; line-height: 1.55; }
+/* Hero claro: el logo es café y verde oscuros, así que sobre crema se lee en
+   sus colores reales. Con el degradado oscuro anterior quedaba en 1.6:1 de
+   contraste —prácticamente invisible— y hacía falta maquillarlo con mezclas. */
+.sb-hero { padding: 3rem 1.25rem 3.5rem; text-align: center; color: var(--sb-brown-deep); background: radial-gradient(120% 100% at 50% 0%, #fffdf9 0%, #f6efe4 45%, var(--sb-cream) 100%); border-bottom: 1px solid var(--sb-line); }
+.sb-hero .sb-eyebrow { color: #9a6d45; }
+.sb-hero h1 { font-family: Georgia, serif; font-weight: 500; font-size: clamp(2.6rem, 12vw, 3.6rem); letter-spacing: -.03em; margin: .4rem 0 1rem; line-height: 1; color: var(--sb-brown-deep); }
+/* El PNG ya trae transparencia, así que no hace falta ninguna mezcla. */
+.sb-hero-logo { display: block; width: min(320px, 76vw); margin: .2rem auto 1.25rem; }
+.sb-hero-sub { max-width: 26rem; margin: 0 auto 1.75rem; color: #7a5c42; font-size: 1rem; line-height: 1.55; }
 .sb-hero-actions { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
 .sb-btn { padding: .85rem 1.6rem; border-radius: 99px; font-size: .82rem; font-weight: 750; }
-.sb-btn-light { background: #fff; color: #2c1c12; }
-.sb-btn-outline { background: transparent; border: 1px solid rgba(255,255,255,.5); color: #fff; }
+/* Sobre el hero claro, el botón sólido pasa a ser el oscuro. */
+.sb-btn-light { background: var(--sb-brown); color: #fff; }
+.sb-btn-outline { background: transparent; border: 1px solid rgba(74,44,26,.35); color: var(--sb-brown); }
 
 .sb-notice { max-width: 640px; margin: 1.25rem auto; margin-left: 1.1rem; margin-right: 1.1rem; }
 

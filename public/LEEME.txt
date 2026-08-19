@@ -1,10 +1,12 @@
-Guarda aquí el logo de Soul Brew con el nombre exacto:
+logo.png — logo de Soul Brew usado en el hero de la vista pública.
 
-    logo.png
+Se generó a partir de soulbrew.png (que venía con fondo blanco y
+mucho margen): se le quitó el fondo y se recortó al contenido,
+quedando en 1129x671 con transparencia real.
 
-El hero aplica mezcla "screen", así que un logo con FONDO NEGRO se ve
-como si fuera transparente sobre el fondo oscuro. Si tienes una versión
-con transparencia real (PNG o SVG), también funciona.
+Para reemplazarlo, guarda otro archivo con el mismo nombre. Si el
+nuevo trae fondo (blanco o negro) en vez de transparencia, avísame
+para volver a procesarlo.
 
-Mientras el archivo no exista, el hero muestra el título "Soul Brew"
-en texto como respaldo, no una imagen rota.
+Si el archivo no existe, el hero muestra el título "Soul Brew" en
+texto como respaldo, no una imagen rota.
