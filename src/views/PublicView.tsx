@@ -119,7 +119,6 @@ export function PublicView() {
       </header>
 
       <section className="sb-hero">
-        <p className="sb-eyebrow">Bienvenido a</p>
         {/* Si aún no se ha subido el archivo del logo, se cae al título de
             texto en vez de dejar una imagen rota. */}
         {logoBroken ? (
