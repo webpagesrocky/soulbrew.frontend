@@ -40,7 +40,7 @@ export function InternalView() {
         {tab === "history" && <HistoryPanel user={user} />}
         {tab === "cash" && <CashPanel user={user} />}
         {tab === "catalog" && canManage && <CatalogPanel user={user} />}
-        {tab === "reports" && canManage && <ReportsPanel />}
+        {tab === "reports" && canManage && <ReportsPanel user={user} />}
         {tab === "team" && canManage && <TeamPanel actor={user} />}
       </div>
     </main>

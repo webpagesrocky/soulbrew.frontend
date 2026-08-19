@@ -491,6 +491,9 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 
 .dashboard-grid .reference-card { min-height: 370px; padding: 22px 19px; }
 .card-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+/* Cualquier h2 dentro del panel interno usa el tamaño compacto. Sin esta
+   regla general, un h2 nuevo hereda el titular gigante de la vista pública. */
+.reference-panel h2,
 .card-heading h2,
 .best-sellers h2,
 .compact-form h2,
@@ -657,6 +660,9 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 /* Borrado en filas de historial */
 .row-delete { border: 0; border-radius: 50%; width: 22px; height: 22px; margin-left: 10px; background: #f5ece8; color: #b2452a; font-size: 10px; flex: 0 0 auto; }
 .row-delete:disabled { opacity: .4; cursor: not-allowed; }
+.session-delete { flex: 0 0 auto; margin-left: 12px; border: 1px solid #e6c4b8; border-radius: 7px; background: transparent; padding: 5px 11px; color: #b2452a; font-size: 11px; font-weight: 750; }
+.session-delete:hover:enabled { background: #fdf1ed; border-color: #b2452a; }
+.session-delete:disabled { opacity: .4; cursor: not-allowed; }
 .order-admin-actions { display: flex; gap: 14px; align-items: center; }
 
 /* Historial */
@@ -674,11 +680,32 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .report-head { color: #8b654d; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; border-bottom: 1px solid var(--ref-border); }
 .report-row { font-size: 12px; border-bottom: 1px solid var(--ref-border); }
 .report-row:last-child { border-bottom: 0; }
-.report-side { display: grid; gap: 16px; align-content: start; }
-.report-side .reference-card { padding: 19px; }
-.report-line { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 12px; border-bottom: 1px dotted var(--ref-border); }
+.report-side { display: grid; gap: 14px; align-content: start; }
+/* Estas tarjetas son listas cortas: el min-height de dashboard-grid las dejaba
+   con medio panel vacío. */
+.report-side .reference-card,
+.dashboard-grid .report-side .reference-card { min-height: 0; padding: 16px 18px; }
+.report-side h2 { font-size: 15px; margin-bottom: 4px; }
+.report-line { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 12px; border-bottom: 1px dotted var(--ref-border); }
 .report-line:last-child { border-bottom: 0; }
 .report-print { margin-top: 18px; text-align: right; }
+.week-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 340px; margin-bottom: 18px; padding: 7px 10px; border: 1px solid var(--ref-border); border-radius: 10px; background: #fff; }
+.week-nav strong { font-size: 12px; color: #4a3527; }
+.week-nav button { border: 0; background: transparent; color: #6d4831; font-size: 11px; font-weight: 750; }
+.week-nav button:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Inventario */
+.inventory-metrics { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
+.inventory-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 18px; align-items: start; margin-bottom: 20px; }
+.stock-head { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(60px, 1fr)); }
+.stock-zero { color: #b2452a; }
+.stock-in { color: #4c6b39; font-weight: 700; }
+.stock-out { color: #b2452a; font-weight: 700; }
+
+@media (max-width: 940px) {
+  .inventory-grid { grid-template-columns: 1fr; }
+  .inventory-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 @media (max-width: 650px) {
   .history-order { grid-template-columns: minmax(0, 1fr) auto; }

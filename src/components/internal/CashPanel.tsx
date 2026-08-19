@@ -189,12 +189,12 @@ export function CashPanel({ user }: { user: User }) {
                 </span>
                 {user.role === "ADMIN" && session.status === "CLOSED" && (
                   <button
-                    className="row-delete"
+                    className="session-delete"
                     disabled={busy}
                     onClick={() => void removeSession(session)}
                     aria-label={`Borrar corte de ${session.userName}`}
                   >
-                    ✕
+                    Borrar
                   </button>
                 )}
               </div>
