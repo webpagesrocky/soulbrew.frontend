@@ -42,17 +42,23 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
   async function remove() {
     const confirmed = window.confirm(
       `¿Eliminar "${product.name}" definitivamente?\n\n` +
-        "Las ventas ya registradas conservan su renglón, pero si este producto " +
-        "aparece en una venta pagada, esa venta ya no se podrá cancelar.\n\n" +
-        "Si sólo quieres retirarlo del menú, cancela y desmarca " +
-        '"Visible en el menú público": eso es reversible.',
+        "• Sus movimientos de inventario se borran y dejan de aparecer en Reportes.\n" +
+        "• Las ventas ya registradas SÍ se conservan: cada orden guarda su propio " +
+        "nombre y precio, así que tus ingresos no cambian.\n" +
+        "• Si este producto aparece en una venta pagada, esa venta ya no se podrá cancelar.\n\n" +
+        'Si sólo quieres retirarlo del menú, cancela y desmarca "Visible en el menú público": ' +
+        "eso es reversible.",
     );
     if (!confirmed) return;
 
     setBusy(true);
     try {
-      await deleteProduct(product.id);
-      onSaved(`"${product.name}" eliminado.`);
+      const removed = await deleteProduct(product.id);
+      onSaved(
+        removed > 0
+          ? `"${product.name}" eliminado junto con ${removed} ${removed === 1 ? "movimiento de inventario" : "movimientos de inventario"}.`
+          : `"${product.name}" eliminado.`,
+      );
       onClose();
     } catch (reason) {
       onError(errorMessage(reason, "No se pudo eliminar el producto"));

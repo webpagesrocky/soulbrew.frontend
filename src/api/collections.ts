@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   limit,
   onSnapshot,
   orderBy,
@@ -12,6 +13,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
   type DocumentData,
   type QueryDocumentSnapshot,
   type QueryConstraint,
@@ -324,8 +326,39 @@ export async function updateSupply(id: string, input: SupplyInput & { stock: num
   await setDoc(doc(db, "supplies", id), input);
 }
 
+/**
+ * Borra los renglones de bitácora que apuntan a algo que dejó de existir.
+ *
+ * Se hace en lotes porque Firestore no tiene "borrar por consulta": hay que
+ * leer los documentos y borrarlos uno por uno.
+ */
+async function deleteMovementsOf(
+  path: "inventoryMovements" | "supplyMovements",
+  field: "productId" | "supplyId",
+  id: string,
+): Promise<number> {
+  const snapshot = await getDocs(query(collection(db, path), where(field, "==", id)));
+  if (snapshot.empty) return 0;
+
+  // Un lote de Firestore admite 500 operaciones; se trocea por si acaso.
+  for (let index = 0; index < snapshot.docs.length; index += 450) {
+    const batch = writeBatch(db);
+    for (const document of snapshot.docs.slice(index, index + 450)) {
+      batch.delete(document.ref);
+    }
+    await batch.commit();
+  }
+  return snapshot.size;
+}
+
+/**
+ * Elimina el insumo junto con su historial de movimientos, para que no queden
+ * renglones huérfanos apareciendo en los reportes.
+ */
 export async function deleteSupply(id: string) {
+  const removed = await deleteMovementsOf("supplyMovements", "supplyId", id);
   await deleteDoc(doc(db, "supplies", id));
+  return removed;
 }
 
 /** Borra un pedido. Sale del historial y del reporte; no descuadra cortes ya cerrados. */
@@ -418,5 +451,11 @@ export async function updateProduct(id: string, input: ProductInput & { active: 
  * Para retirar algo del menú de forma reversible, usa `active: false`.
  */
 export async function deleteProduct(id: string) {
+  // Los movimientos de inventario se van con el producto: sin él, un renglón
+  // de "merma de Matcha Latte" ya no tiene sujeto y sólo ensucia el reporte.
+  // Las ventas NO se tocan: cada orden guarda su propio nombre y precio, así
+  // que el historial de ingresos sobrevive intacto.
+  const removed = await deleteMovementsOf("inventoryMovements", "productId", id);
   await deleteDoc(doc(db, "products", id));
+  return removed;
 }

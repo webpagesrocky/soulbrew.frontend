@@ -133,12 +133,23 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
   }
 
   async function remove(supply: Supply) {
-    if (!window.confirm(`¿Eliminar el insumo "${supply.name}"?\n\nSu historial de movimientos se conserva.`)) return;
+    if (
+      !window.confirm(
+        `¿Eliminar el insumo "${supply.name}"?\n\n` +
+          "Sus entradas y salidas también se borran y dejan de aparecer en Reportes.",
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     try {
-      await deleteSupply(supply.id);
+      const removed = await deleteSupply(supply.id);
       setEditing(null);
-      onMessage(`"${supply.name}" eliminado.`);
+      onMessage(
+        removed > 0
+          ? `"${supply.name}" eliminado junto con ${removed} ${removed === 1 ? "movimiento" : "movimientos"}.`
+          : `"${supply.name}" eliminado.`,
+      );
     } catch (reason) {
       onError(errorMessage(reason, "No se pudo eliminar el insumo"));
     } finally {
