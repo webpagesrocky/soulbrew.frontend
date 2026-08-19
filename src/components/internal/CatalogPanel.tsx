@@ -68,6 +68,7 @@ export function CatalogPanel({ user }: { user: User }) {
         // La foto subida gana sobre la URL pegada: es la acción más explícita.
         imageUrl: image ?? (url || null),
         price: Number(data.get("price")),
+        cost: Number(data.get("cost") ?? 0) || 0,
       });
       form.reset();
       setImage(null);
@@ -122,17 +123,18 @@ export function CatalogPanel({ user }: { user: User }) {
 
             <ImageField value={image} onChange={setImage} onError={setError} allowUrl />
 
-            <div className="inline-form">
+            <div className="price-cost-row">
               <input
                 name="price"
-                placeholder="Precio"
+                placeholder="Precio de venta"
                 type="number"
                 min="0.01"
                 step="0.01"
                 required
               />
-              <button className="reference-primary">+ Agregar</button>
+              <input name="cost" placeholder="Costo" type="number" min="0" step="0.01" />
             </div>
+            <button className="reference-primary">+ Agregar</button>
           </form>
 
           <CategoryManager

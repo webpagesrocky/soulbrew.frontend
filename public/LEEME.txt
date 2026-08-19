@@ -1,0 +1,9 @@
+Guarda aquí el logo de Soul Brew con el nombre exacto:
+
+    logo.png
+
+(o logo.svg si lo tienes vectorial — en ese caso avísame para
+cambiar la referencia en el código).
+
+Mientras el archivo no exista, el hero muestra el título
+"Soul Brew" en texto como respaldo, no una imagen rota.

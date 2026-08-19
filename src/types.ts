@@ -30,6 +30,8 @@ export interface Product {
   /** data URI comprimido o URL externa; null si no tiene foto. */
   imageUrl: string | null;
   price: number;
+  /** Costo de preparación. 0 en productos dados de alta antes de este campo. */
+  cost: number;
   stock: number;
   active: boolean;
 }
@@ -79,6 +81,9 @@ export interface CashSession {
   closedAt: Date | null;
 }
 
+/** WASTE: merma registrada al cerrar turno. ADJUSTMENT: corrección manual. */
+export type MovementType = "WASTE" | "ADJUSTMENT";
+
 export interface InventoryMovement {
   id: string;
   productId: string;
@@ -87,5 +92,6 @@ export interface InventoryMovement {
   userName: string;
   quantityChange: number;
   reason: string;
+  type: MovementType;
   createdAt: Date | null;
 }

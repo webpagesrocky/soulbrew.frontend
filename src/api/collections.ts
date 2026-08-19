@@ -51,6 +51,7 @@ function toProduct(snapshot: Snapshot): Product {
     category: data.category as ProductCategory,
     imageUrl: data.imageUrl ?? null,
     price: data.price,
+    cost: data.cost ?? 0,
     stock: data.stock,
     active: Boolean(data.active),
   };
@@ -124,6 +125,8 @@ function toMovement(snapshot: Snapshot): InventoryMovement {
     userName: data.userName,
     quantityChange: data.quantityChange,
     reason: data.reason,
+    // Los movimientos anteriores a que existiera `type` eran todos manuales.
+    type: data.type ?? "ADJUSTMENT",
     createdAt: toDate(data.createdAt),
   };
 }
@@ -182,6 +185,34 @@ export function subscribeOrders(
   );
 }
 
+/** Inicio del día local (00:00) del día indicado. */
+export function startOfDay(date = new Date()): Date {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+/**
+ * Pedidos dentro de un rango. Lo usan tanto el panel del día como el historial
+ * y el reporte semanal, que sólo cambian los extremos del rango.
+ */
+export function subscribeOrdersBetween(
+  from: Date,
+  to: Date | null,
+  onData: (orders: Order[]) => void,
+  onError: (error: Error) => void,
+) {
+  const constraints: QueryConstraint[] = [where("createdAt", ">=", Timestamp.fromDate(from))];
+  if (to) constraints.push(where("createdAt", "<", Timestamp.fromDate(to)));
+  return subscribe(
+    "orders",
+    [...constraints, orderBy("createdAt", "desc"), limit(500)],
+    toOrder,
+    onData,
+    onError,
+  );
+}
+
 /**
  * Historial de cortes. `userId` no es opcional por comodidad: un empleado sólo
  * puede leer sus propios cortes, y las reglas rechazan la consulta entera si no
@@ -209,14 +240,28 @@ export function subscribeUsers(onData: (users: User[]) => void, onError: (error:
 export function subscribeInventoryMovements(
   onData: (movements: InventoryMovement[]) => void,
   onError: (error: Error) => void,
+  from?: Date,
 ) {
+  const constraints: QueryConstraint[] = from
+    ? [where("createdAt", ">=", Timestamp.fromDate(from))]
+    : [];
   return subscribe(
     "inventoryMovements",
-    [orderBy("createdAt", "desc"), limit(250)],
+    [...constraints, orderBy("createdAt", "desc"), limit(250)],
     toMovement,
     onData,
     onError,
   );
+}
+
+/** Borra un pedido. Sale del historial y del reporte; no descuadra cortes ya cerrados. */
+export async function deleteOrder(id: string) {
+  await deleteDoc(doc(db, "orders", id));
+}
+
+/** Borra un corte de caja. Las reglas sólo lo permiten si ya está cerrado. */
+export async function deleteCashSession(id: string) {
+  await deleteDoc(doc(db, "cashSessions", id));
 }
 
 /** Categorías del menú. Lectura pública: el menú las necesita sin sesión. */
@@ -270,6 +315,7 @@ export interface ProductInput {
   category: ProductCategory;
   imageUrl: string | null;
   price: number;
+  cost: number;
 }
 
 /**

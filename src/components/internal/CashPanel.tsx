@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { subscribeCashSessions } from "../../api/collections";
+import { deleteCashSession, subscribeCashSessions, subscribeProducts } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
-import { closeCashSession, openCashSession } from "../../api/transactions";
-import type { CashSession, CashTotals, User } from "../../types";
+import { closeCashSession, openCashSession, registerWaste } from "../../api/transactions";
+import type { CashSession, CashTotals, Product, User } from "../../types";
+import { WasteEditor, type WasteLine } from "./WasteEditor";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
@@ -15,6 +16,7 @@ interface ClosingReport {
   expectedAmount: number;
   differenceAmount: number;
   totals: CashTotals;
+  waste: Array<{ name: string; quantity: number; reason: string }>;
 }
 
 export function CashPanel({ user }: { user: User }) {
@@ -23,6 +25,17 @@ export function CashPanel({ user }: { user: User }) {
   const [error, setError] = useState("");
   const [report, setReport] = useState<ClosingReport | null>(null);
   const [busy, setBusy] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [waste, setWaste] = useState<WasteLine[]>([]);
+
+  useEffect(
+    () =>
+      subscribeProducts(
+        setProducts,
+        (reason) => setError(errorMessage(reason, "No se pudo cargar el inventario")),
+      ),
+    [],
+  );
 
   useEffect(
     () =>
@@ -49,6 +62,15 @@ export function CashPanel({ user }: { user: User }) {
     setError("");
     try {
       if (current) {
+        // La merma se aplica ANTES de cerrar: una vez cerrado el turno ya no
+        // se puede tocar, y así el inventario final del corte ya la refleja.
+        for (const line of waste) {
+          await registerWaste(line.productId, line.quantity, line.reason, {
+            uid: user.id,
+            name: user.name,
+          });
+        }
+
         const result = await closeCashSession(current.id, Number(amount));
         setReport({
           userName: current.userName,
@@ -59,7 +81,13 @@ export function CashPanel({ user }: { user: User }) {
           expectedAmount: result.expectedAmount,
           differenceAmount: result.differenceAmount,
           totals: result.totals,
+          waste: waste.map((line) => ({
+            name: products.find((product) => product.id === line.productId)?.name ?? line.productId,
+            quantity: line.quantity,
+            reason: line.reason,
+          })),
         });
+        setWaste([]);
       } else {
         await openCashSession(Number(amount), { uid: user.id, name: user.name });
       }
@@ -68,6 +96,25 @@ export function CashPanel({ user }: { user: User }) {
       setError(
         errorMessage(reason, current ? "No se pudo cerrar la caja" : "No se pudo abrir la caja"),
       );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeSession(session: CashSession) {
+    const confirmed = window.confirm(
+      `¿Borrar el corte de ${session.userName} del ` +
+        `${session.openedAt ? session.openedAt.toLocaleDateString("es-MX") : "—"}?\n\n` +
+        "Desaparece del historial y del reporte semanal. Las ventas de ese turno " +
+        "se conservan, pero quedan sin corte asociado y ya no se podrán cancelar.",
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      await deleteCashSession(session.id);
+    } catch (reason) {
+      setError(errorMessage(reason, "No se pudo borrar el corte"));
     } finally {
       setBusy(false);
     }
@@ -108,8 +155,15 @@ export function CashPanel({ user }: { user: User }) {
               onChange={(event) => setAmount(event.target.value)}
               required
             />
+            {current && (
+              <WasteEditor products={products} lines={waste} onChange={setWaste} />
+            )}
             <button className="primary-button light-button" disabled={busy}>
-              {current ? "Cerrar y generar corte" : "Abrir caja"}
+              {busy
+                ? "Procesando…"
+                : current
+                  ? "Cerrar y generar corte"
+                  : "Abrir caja"}
             </button>
           </form>
         </article>
@@ -133,6 +187,16 @@ export function CashPanel({ user }: { user: User }) {
                       : money.format(session.closingAmount)}
                   </small>
                 </span>
+                {user.role === "ADMIN" && session.status === "CLOSED" && (
+                  <button
+                    className="row-delete"
+                    disabled={busy}
+                    onClick={() => void removeSession(session)}
+                    aria-label={`Borrar corte de ${session.userName}`}
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             ))}
             {!sessions.length && <p className="muted">Todavía no hay cortes.</p>}
@@ -172,6 +236,21 @@ export function CashPanel({ user }: { user: User }) {
             <div className="cash-report-row"><span>Efectivo</span><span>{money.format(report.totals.cashTotal)}</span></div>
             <div className="cash-report-row"><span>Tarjeta</span><span>{money.format(report.totals.cardTotal)}</span></div>
             <div className="cash-report-row"><span>Transferencia</span><span>{money.format(report.totals.transferTotal)}</span></div>
+
+            {report.waste.length > 0 && (
+              <>
+                <p className="cash-report-section">Merma registrada</p>
+                {report.waste.map((line, index) => (
+                  <div className="cash-report-row" key={`${line.name}-${index}`}>
+                    <span>
+                      {line.quantity} × {line.name}
+                      <small> · {line.reason}</small>
+                    </span>
+                    <span>—</span>
+                  </div>
+                ))}
+              </>
+            )}
 
             <div className="cash-report-actions">
               <button className="reference-primary" onClick={() => window.print()}>Imprimir</button>

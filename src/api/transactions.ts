@@ -255,7 +255,13 @@ export async function closeCashSession(sessionId: string, closingAmount: number)
   });
 }
 
-export async function adjustInventory(productId: string, quantityChange: number, reason: string, actor: Actor) {
+async function moveStock(
+  productId: string,
+  quantityChange: number,
+  reason: string,
+  type: "WASTE" | "ADJUSTMENT",
+  actor: Actor,
+) {
   const ref = productRef(productId);
   const movementRef = doc(collection(db, "inventoryMovements"));
 
@@ -264,7 +270,13 @@ export async function adjustInventory(productId: string, quantityChange: number,
     if (!snap.exists()) throw new OrderError("Producto no encontrado");
     const product = snap.data() as { name: string; stock: number };
     const stock = product.stock + quantityChange;
-    if (stock < 0) throw new OrderError("El ajuste dejaría existencias negativas");
+    if (stock < 0) {
+      throw new OrderError(
+        type === "WASTE"
+          ? `No hay tanto ${product.name} en existencia para registrar esa merma`
+          : "El ajuste dejaría existencias negativas",
+      );
+    }
 
     tx.update(ref, { stock });
     tx.set(movementRef, {
@@ -274,9 +286,37 @@ export async function adjustInventory(productId: string, quantityChange: number,
       userName: actor.name,
       quantityChange,
       reason,
+      type,
       createdAt: serverTimestamp(),
     });
 
     return { productId, previousStock: product.stock, change: quantityChange, stock, reason };
   });
+}
+
+/** Corrección manual de existencias. Sólo administración. */
+export async function adjustInventory(
+  productId: string,
+  quantityChange: number,
+  reason: string,
+  actor: Actor,
+) {
+  return moveStock(productId, quantityChange, reason, "ADJUSTMENT", actor);
+}
+
+/**
+ * Merma del turno: lo que se tiró, se derramó o se dio de muestra.
+ *
+ * Se registra al cerrar caja y descuenta inventario. No duplica el descuento
+ * de las ventas: aquéllas ya se restaron al cobrarse, esto es lo que se perdió
+ * sin venderse.
+ */
+export async function registerWaste(
+  productId: string,
+  quantity: number,
+  reason: string,
+  actor: Actor,
+) {
+  if (quantity <= 0) throw new OrderError("La merma debe ser mayor a cero");
+  return moveStock(productId, -Math.abs(quantity), reason, "WASTE", actor);
 }

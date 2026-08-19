@@ -27,6 +27,7 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
         category: String(data.get("category")),
         imageUrl: image,
         price: Number(data.get("price")),
+        cost: Number(data.get("cost") ?? 0) || 0,
         active: data.get("active") === "on",
       });
       onSaved(`"${String(data.get("name"))}" actualizado.`);
@@ -94,15 +95,34 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
           )}
         </select>
 
-        <label>Precio</label>
-        <input
-          name="price"
-          type="number"
-          min="0.01"
-          step="0.01"
-          defaultValue={product.price}
-          required
-        />
+        <div className="price-cost-fields">
+          <div>
+            <label>Precio de venta</label>
+            <input
+              name="price"
+              type="number"
+              min="0.01"
+              step="0.01"
+              defaultValue={product.price}
+              required
+            />
+          </div>
+          <div>
+            <label>Costo</label>
+            <input
+              name="cost"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={product.cost || ""}
+              placeholder="0.00"
+            />
+          </div>
+        </div>
+        <p className="editor-note">
+          El costo se usa para calcular la ganancia en el reporte semanal. Si lo dejas vacío,
+          ese producto cuenta como costo cero.
+        </p>
 
         <label>Imagen</label>
         <ImageField value={image} onChange={setImage} onError={onError} />

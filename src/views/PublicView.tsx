@@ -19,6 +19,7 @@ export function PublicView() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [logoBroken, setLogoBroken] = useState(false);
 
   // El menú se mantiene en vivo: si en el panel interno agotan o desactivan un
   // producto, desaparece de la carta sin que nadie recargue la página.
@@ -119,7 +120,18 @@ export function PublicView() {
 
       <section className="sb-hero">
         <p className="sb-eyebrow">Bienvenido a</p>
-        <h1>Soul Brew</h1>
+        {/* Si aún no se ha subido el archivo del logo, se cae al título de
+            texto en vez de dejar una imagen rota. */}
+        {logoBroken ? (
+          <h1>Soul Brew</h1>
+        ) : (
+          <img
+            className="sb-hero-logo"
+            src="/logo.png"
+            alt="Soul Brew"
+            onError={() => setLogoBroken(true)}
+          />
+        )}
         <p className="sb-hero-sub">Café de especialidad y matcha.</p>
         <div className="sb-hero-actions">
           <a href="#menu" className="sb-btn sb-btn-light">Ver menú</a>
