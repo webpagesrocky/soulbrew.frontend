@@ -1,12 +1,16 @@
-logo.png — logo de Soul Brew usado en el hero de la vista pública.
+Logos de Soul Brew.
 
-Se generó a partir de soulbrew.png (que venía con fondo blanco y
-mucho margen): se le quitó el fondo y se recortó al contenido,
-quedando en 1129x671 con transparencia real.
+  logo.png        colores de marca (verde + café) sobre transparencia.
+                  Generado desde soulbrew.png: se le quitó el fondo
+                  blanco y se recortó el margen sobrante. 1129x671.
 
-Para reemplazarlo, guarda otro archivo con el mismo nombre. Si el
-nuevo trae fondo (blanco o negro) en vez de transparencia, avísame
-para volver a procesarlo.
+  logo-light.png  el mismo trazo en blanco, que es el que usa el hero.
+                  Existe porque sobre el fondo café oscuro del hero, el
+                  logo en sus colores queda en 1.6:1 de contraste, o sea
+                  invisible. En blanco llega a 12.6:1.
 
-Si el archivo no existe, el hero muestra el título "Soul Brew" en
-texto como respaldo, no una imagen rota.
+Para reemplazarlos, guarda archivos con los mismos nombres. Si el nuevo
+trae fondo (blanco o negro) en vez de transparencia, avísame para
+procesarlo.
+
+Si falta el archivo, el hero muestra "Soul Brew" en texto como respaldo.

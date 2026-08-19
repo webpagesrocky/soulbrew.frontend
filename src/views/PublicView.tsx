@@ -127,12 +127,11 @@ export function PublicView() {
         ) : (
           <img
             className="sb-hero-logo"
-            src="/logo.png"
+            src="/logo-light.png"
             alt="Soul Brew"
             onError={() => setLogoBroken(true)}
           />
         )}
-        <p className="sb-hero-sub">Café de especialidad y matcha.</p>
         <div className="sb-hero-actions">
           <a href="#menu" className="sb-btn sb-btn-light">Ver menú</a>
           <a href="#menu" className="sb-btn sb-btn-outline">Ordenar</a>
