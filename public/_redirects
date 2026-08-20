@@ -1,0 +1,10 @@
+#  Esta es una aplicación de una sola página: el enrutado de /interna,
+#  /historial, /login, etc. lo resuelve React en el navegador, no el servidor.
+#
+#  Sin esta regla, al recargar estando en /interna el navegador le pide esa
+#  ruta a Netlify, que no tiene ningún archivo ahí y responde 404. Con ella,
+#  Netlify devuelve index.html (con estado 200, no redirección) y React lee la
+#  URL y pinta la pantalla correcta.
+#
+#  Debe ir al final: Netlify aplica la primera regla que coincide.
+/*    /index.html   200
