@@ -19,14 +19,18 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
  * El rol viaja en los custom claims del ID token, no en Firestore: así las
- * reglas de seguridad y las Cloud Functions lo leen sin una lectura extra, y
- * el cliente no puede falsearlo.
+ * reglas de seguridad lo leen sin una lectura extra y el cliente no puede
+ * falsearlo.
  *
- * `forceRefresh` obliga a renovar el token para que un cambio de rol o una
- * baja de la cuenta surtan efecto en la siguiente carga y no hasta que expire.
+ * `forceRefresh` en false lee el token ya guardado en el dispositivo, sin
+ * tocar la red. Con true pide uno nuevo al servidor, que es la única forma de
+ * enterarse de un cambio de rol o de una baja de cuenta.
  */
-async function toUser(firebaseUser: FirebaseUser): Promise<User | null> {
-  const token = await firebaseUser.getIdTokenResult(true);
+async function toUser(
+  firebaseUser: FirebaseUser,
+  forceRefresh: boolean,
+): Promise<User | null> {
+  const token = await firebaseUser.getIdTokenResult(forceRefresh);
   const role = token.claims.role as Role | undefined;
 
   if (!role || token.claims.active !== true) return null;
@@ -45,30 +49,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(
-    () =>
-      onAuthStateChanged(auth, async (firebaseUser) => {
-        if (!firebaseUser) {
+  useEffect(() => {
+    let cancelled = false;
+
+    /**
+     * Comprueba contra el servidor si el rol sigue vigente, sin bloquear la
+     * carga. Sólo cierra sesión cuando el servidor confirma que la cuenta ya
+     * no tiene acceso; si no hay red, se deja la sesión como está.
+     */
+    async function revalidate(firebaseUser: FirebaseUser) {
+      try {
+        const refreshed = await toUser(firebaseUser, true);
+        if (cancelled) return;
+        if (refreshed) setUser(refreshed);
+        else {
+          await signOut(auth);
           setUser(null);
+        }
+      } catch {
+        // Sin conexión: la sesión guardada sigue siendo válida hasta que se
+        // pueda confirmar lo contrario.
+      }
+    }
+
+    return onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Primero el token guardado: es instantáneo y funciona sin internet,
+        // así que una recarga con la red caída ya no saca a nadie del panel.
+        const cached = await toUser(firebaseUser, false);
+        if (cancelled) return;
+
+        if (cached) {
+          setUser(cached);
           setLoading(false);
+          void revalidate(firebaseUser);
           return;
         }
-        try {
-          const resolved = await toUser(firebaseUser);
-          if (!resolved) await signOut(auth);
-          setUser(resolved);
-        } catch {
+
+        // Sin rol en el token guardado. Puede ser una cuenta recién creada a
+        // la que le acaban de asignar el rol, así que se pide uno fresco antes
+        // de darla por inválida.
+        const refreshed = await toUser(firebaseUser, true);
+        if (cancelled) return;
+
+        if (refreshed) {
+          setUser(refreshed);
+        } else {
+          await signOut(auth);
           setUser(null);
-        } finally {
-          setLoading(false);
         }
-      }),
-    [],
-  );
+      } catch {
+        // Un fallo de red no debe cerrar la sesión: se marca como no
+        // autenticado en esta carga, pero el token guardado sigue intacto y
+        // la siguiente recarga con conexión vuelve a entrar sola.
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    });
+  }, []);
 
   async function login(email: string, password: string) {
     const credential = await signInWithEmailAndPassword(auth, email, password);
-    const resolved = await toUser(credential.user);
+    const resolved = await toUser(credential.user, true);
 
     // Cuenta válida en Firebase Auth pero sin rol asignado o dada de baja.
     if (!resolved) {
