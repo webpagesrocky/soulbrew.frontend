@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { deleteOrder, startOfDay, subscribeOrdersBetween } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
 import { cancelOrder, payOrder } from "../../api/transactions";
+import { ManualOrder } from "./ManualOrder";
 import type { Order, OrderStatus, PaymentMethod, User } from "../../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -15,7 +16,9 @@ export function OrdersPanel({ user }: { user: User }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<OrderStatus | "">("PENDING");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   // Este panel es la operación del día: sólo trae los pedidos de hoy. Los de
   // días anteriores viven en Historial, para que la barra no tenga que
@@ -89,6 +92,11 @@ export function OrdersPanel({ user }: { user: User }) {
           <h1>Pedidos de hoy</h1>
           <p>Los de días anteriores están en Historial.</p>
         </div>
+        <div className="orders-actions">
+          <button className="reference-primary new-order-btn" onClick={() => setCreating(true)}>
+            + Nuevo pedido
+          </button>
+        </div>
         <div className="segmented">
           {(["PENDING", "PAID", "CANCELLED", ""] as const).map((value) => (
             <button
@@ -102,6 +110,7 @@ export function OrdersPanel({ user }: { user: User }) {
         </div>
       </div>
       {error && <div className="notice error">{error}</div>}
+      {message && <div className="notice success">{message}</div>}
       <div className="order-grid">
         {visibleOrders.map((order) => (
           <article className="order-card" key={order.id}>
@@ -168,6 +177,17 @@ export function OrdersPanel({ user }: { user: User }) {
           <div className="empty-state">No hay pedidos de hoy en esta categoría.</div>
         )}
       </div>
+
+      {creating && (
+        <ManualOrder
+          user={user}
+          onClose={() => setCreating(false)}
+          onDone={(text) => {
+            setMessage(text);
+            setError("");
+          }}
+        />
+      )}
     </section>
   );
 }

@@ -39,11 +39,6 @@ export function CatalogPanel({ user }: { user: User }) {
     [],
   );
 
-  const categoryName = useMemo(() => {
-    const map = new Map(categories.map((item) => [item.id, item.name]));
-    return (id: string) => map.get(id) ?? id;
-  }, [categories]);
-
   const visibleProducts = useMemo(
     () =>
       products.filter((product) => {
@@ -53,6 +48,27 @@ export function CatalogPanel({ user }: { user: User }) {
       }),
     [filter, products],
   );
+
+  /**
+   * El listado se agrupa por categoría, en el mismo orden que el menú público,
+   * para que revisar la carta aquí se parezca a verla del lado del cliente.
+   * Al final van los productos cuya categoría ya no existe, que si no
+   * quedarían invisibles.
+   */
+  const groupedProducts = useMemo(() => {
+    const groups = categories.map((category) => ({
+      id: category.id,
+      label: `${category.emoji} ${category.name}`.trim(),
+      items: visibleProducts.filter((product) => product.category === category.id),
+    }));
+
+    const known = new Set(categories.map((category) => category.id));
+    const orphans = visibleProducts.filter((product) => !known.has(product.category));
+    if (orphans.length) {
+      groups.push({ id: "__sin_categoria", label: "Sin categoría", items: orphans });
+    }
+    return groups.filter((group) => group.items.length > 0);
+  }, [categories, visibleProducts]);
 
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -194,34 +210,46 @@ export function CatalogPanel({ user }: { user: User }) {
             </button>
           </div>
           <div className="reference-products">
-            {visibleProducts.map((product) => (
-              <div className="reference-product" key={product.id}>
-                <div className="product-thumbnail">
-                  {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.name} loading="lazy" />
-                  ) : (
-                    product.name.slice(0, 1)
-                  )}
-                </div>
-                <div>
-                  <strong>{product.name}</strong>
+            {groupedProducts.map((group) => (
+              <section className="product-group" key={group.id}>
+                <h3 className="product-group-title">
+                  <span>{group.label}</span>
                   <small>
-                    {categoryName(product.category)} ·{" "}
-                    {product.description || "Producto Soul Brew"} · {money.format(product.price)}
+                    {group.items.length} {group.items.length === 1 ? "producto" : "productos"}
                   </small>
-                </div>
-                <span className={product.active && product.stock > 0 ? "available" : "unavailable"}>
-                  ▣ {product.active && product.stock > 0 ? "Disponible" : "Agotado"}
-                </span>
-                <b>{product.stock} uds</b>
-                <button
-                  className="product-edit"
-                  onClick={() => setEditing(product)}
-                  aria-label={`Editar ${product.name}`}
-                >
-                  Editar
-                </button>
-              </div>
+                </h3>
+                {group.items.map((product) => (
+                  <div className="reference-product" key={product.id}>
+                    <div className="product-thumbnail">
+                      {product.imageUrl ? (
+                        <img src={product.imageUrl} alt={product.name} loading="lazy" />
+                      ) : (
+                        product.name.slice(0, 1)
+                      )}
+                    </div>
+                    <div>
+                      <strong>{product.name}</strong>
+                      <small>
+                        {product.description || "Producto Soul Brew"} ·{" "}
+                        {money.format(product.price)}
+                      </small>
+                    </div>
+                    <span
+                      className={product.active && product.stock > 0 ? "available" : "unavailable"}
+                    >
+                      ▣ {product.active && product.stock > 0 ? "Disponible" : "Agotado"}
+                    </span>
+                    <b>{product.stock} uds</b>
+                    <button
+                      className="product-edit"
+                      onClick={() => setEditing(product)}
+                      aria-label={`Editar ${product.name}`}
+                    >
+                      Editar
+                    </button>
+                  </div>
+                ))}
+              </section>
             ))}
             {!visibleProducts.length && (
               <p className="reference-empty">No hay productos en este filtro.</p>
