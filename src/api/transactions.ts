@@ -42,11 +42,16 @@ function productRef(productId: string): DocumentReference {
 }
 
 export interface CreateOrderInput {
-  customerName: string;
+  customerPhone: string;
   items: Array<{ productId: string; quantity: number }>;
 }
 
+const PHONE_PATTERN = /^\d{10}$/;
+
 export async function createPublicOrder(input: CreateOrderInput) {
+  if (!PHONE_PATTERN.test(input.customerPhone)) {
+    throw new OrderError("El número de celular debe tener 10 dígitos.");
+  }
   const aggregated = new Map<string, number>();
   for (const item of input.items) {
     aggregated.set(item.productId, (aggregated.get(item.productId) ?? 0) + item.quantity);
@@ -87,7 +92,7 @@ export async function createPublicOrder(input: CreateOrderInput) {
     tx.set(orderRef, {
       code,
       sequence,
-      customerName: input.customerName,
+      customerPhone: input.customerPhone,
       status: "PENDING",
       paymentMethod: null,
       total,
@@ -100,7 +105,7 @@ export async function createPublicOrder(input: CreateOrderInput) {
       cancelledAt: null,
     });
 
-    return { id: orderRef.id, code, customerName: input.customerName, status: "PENDING" as const, total };
+    return { id: orderRef.id, code, customerPhone: input.customerPhone, status: "PENDING" as const, total };
   });
 }
 

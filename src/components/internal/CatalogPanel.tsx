@@ -47,8 +47,8 @@ export function CatalogPanel({ user }: { user: User }) {
   const visibleProducts = useMemo(
     () =>
       products.filter((product) => {
-        if (filter === "AVAILABLE") return product.active && product.stock > 0 && !product.soldOut;
-        if (filter === "SOLD_OUT") return product.stock === 0 || product.soldOut;
+        if (filter === "AVAILABLE") return product.active && !product.soldOut;
+        if (filter === "SOLD_OUT") return product.soldOut;
         return true;
       }),
     [filter, products],
@@ -254,29 +254,11 @@ export function CatalogPanel({ user }: { user: User }) {
                     </div>
                     <button
                       type="button"
-                      className={`avail-toggle ${
-                        product.stock === 0
-                          ? "unavailable"
-                          : product.soldOut
-                            ? "unavailable manual"
-                            : "available"
-                      }`}
+                      className={`avail-toggle ${product.soldOut ? "unavailable manual" : "available"}`}
                       onClick={() => void toggleSoldOut(product)}
-                      disabled={product.stock === 0}
-                      title={
-                        product.stock === 0
-                          ? "Sin existencia — ajusta el inventario para reactivarlo"
-                          : product.soldOut
-                            ? "Marcar disponible de nuevo"
-                            : "Marcar agotado por hoy"
-                      }
+                      title={product.soldOut ? "Marcar disponible de nuevo" : "Marcar agotado por hoy"}
                     >
-                      ▣{" "}
-                      {product.stock === 0
-                        ? "Sin stock"
-                        : product.soldOut
-                          ? "Agotado (hoy)"
-                          : "Disponible"}
+                      ▣ {product.soldOut ? "Agotado (hoy)" : "Disponible"}
                     </button>
                     <b>{product.stock} uds</b>
                     <button

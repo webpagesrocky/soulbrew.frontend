@@ -13,6 +13,13 @@ const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN
  */
 const MAX_ITEMS = 8;
 
+/**
+ * Tope de unidades por producto en un pedido. El stock real ya no limita la
+ * venta (sólo el interruptor manual "agotado" lo hace); este número evita
+ * pedidos absurdos, no representa inventario disponible.
+ */
+const MAX_QTY = 20;
+
 interface Props {
   user: User;
   onClose: () => void;
@@ -31,7 +38,7 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [category, setCategory] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
-  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -70,7 +77,7 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
   function change(product: Product, delta: number) {
     setError("");
     setCart((current) => {
-      const next = Math.max(0, Math.min(product.stock, (current[product.id] ?? 0) + delta));
+      const next = Math.max(0, Math.min(MAX_QTY, (current[product.id] ?? 0) + delta));
       if (next === 0) {
         const copy = { ...current };
         delete copy[product.id];
@@ -86,13 +93,13 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
 
   async function submit(charge: PaymentMethod | null) {
     if (!selections.length) return setError("Agrega al menos un producto.");
-    if (customerName.trim().length < 2) return setError("Escribe a nombre de quién va el pedido.");
+    if (!/^\d{10}$/.test(customerPhone)) return setError("Escribe el número de celular del cliente (10 dígitos).");
 
     setBusy(true);
     setError("");
     try {
       const order = await createPublicOrder({
-        customerName: customerName.trim(),
+        customerPhone,
         items: selections.map((product) => ({
           productId: product.id,
           quantity: cart[product.id]!,
@@ -147,7 +154,7 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
             <div className="manual-products">
               {shown.map((product) => {
                 const quantity = cart[product.id] ?? 0;
-                const soldOut = product.stock === 0 || product.soldOut;
+                const soldOut = product.soldOut;
                 return (
                   <button
                     key={product.id}
@@ -184,7 +191,7 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
                     <span>{cart[product.id]}</span>
                     <button
                       onClick={() => change(product, 1)}
-                      disabled={(cart[product.id] ?? 0) >= product.stock}
+                      disabled={(cart[product.id] ?? 0) >= MAX_QTY}
                     >
                       +
                     </button>
@@ -200,12 +207,15 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
               <strong>{money.format(total)}</strong>
             </div>
 
-            <label>¿A nombre de quién?</label>
+            <label>Número de celular del cliente</label>
             <input
-              value={customerName}
-              onChange={(event) => setCustomerName(event.target.value)}
-              placeholder="Nombre del cliente"
-              minLength={2}
+              value={customerPhone}
+              onChange={(event) => setCustomerPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
+              inputMode="numeric"
+              pattern="[0-9]{10}"
+              placeholder="10 dígitos"
+              minLength={10}
+              maxLength={10}
             />
 
             <p className="manual-hint">Cobrar requiere tener una caja abierta.</p>

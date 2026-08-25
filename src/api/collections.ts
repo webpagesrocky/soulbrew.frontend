@@ -78,7 +78,7 @@ function toOrder(snapshot: Snapshot): Order {
   return {
     id: snapshot.id,
     code: data.code,
-    customerName: data.customerName,
+    customerPhone: data.customerPhone,
     status: data.status as OrderStatus,
     paymentMethod: data.paymentMethod ?? null,
     total: data.total,

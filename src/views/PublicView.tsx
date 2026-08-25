@@ -8,12 +8,19 @@ import type { Category, Product, ProductCategory } from "../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
+/**
+ * Tope de unidades por producto en un pedido. El stock real ya no limita la
+ * venta (sólo el interruptor manual "agotado" lo hace); este número evita
+ * carritos absurdos, no representa inventario disponible.
+ */
+const MAX_QTY = 20;
+
 export function PublicView() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [category, setCategory] = useState<ProductCategory | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
-  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -67,7 +74,7 @@ export function PublicView() {
 
   function changeQuantity(product: Product, difference: number) {
     setCart((current) => {
-      const next = Math.max(0, Math.min(product.stock, (current[product.id] ?? 0) + difference));
+      const next = Math.max(0, Math.min(MAX_QTY, (current[product.id] ?? 0) + difference));
       return { ...current, [product.id]: next };
     });
   }
@@ -83,18 +90,19 @@ export function PublicView() {
   async function placeOrder(event: React.FormEvent) {
     event.preventDefault();
     if (!selections.length) return setError("Elige al menos un producto.");
+    if (!/^\d{10}$/.test(customerPhone)) return setError("Escribe un número de celular a 10 dígitos.");
     setSending(true);
     setError("");
     try {
       const order = await createPublicOrder({
-        customerName,
+        customerPhone,
         items: selections.map((product) => ({
           productId: product.id,
           quantity: cart[product.id]!,
         })),
       });
       setMessage(`¡Orden ${order.code} recibida! Paga ${money.format(order.total)} en caja.`);
-      setCustomerName("");
+      setCustomerPhone("");
       setCart({});
       setCartOpen(false);
     } catch (reason) {
@@ -162,9 +170,9 @@ export function PublicView() {
           <div className="sb-product-grid">
             {categoryProducts.map((product) => {
               const quantity = cart[product.id] ?? 0;
-              // El interruptor manual de "agotado" (soldOut) cuenta igual que
-              // no tener existencias, aunque el stock real siga positivo.
-              const outOfStock = product.stock === 0 || product.soldOut;
+              // La disponibilidad la decide sólo el interruptor manual
+              // "agotado"; el stock es un dato contable, no un bloqueo de venta.
+              const outOfStock = product.soldOut;
               return (
                 <article className={`sb-product-card ${outOfStock ? "sold-out" : ""}`} key={product.id}>
                   <div className="sb-product-art">
@@ -177,7 +185,7 @@ export function PublicView() {
                       <button
                         className="sb-add-btn"
                         onClick={() => changeQuantity(product, 1)}
-                        disabled={quantity >= product.stock}
+                        disabled={quantity >= MAX_QTY}
                         aria-label={`Agregar ${product.name}`}
                       >
                         +
@@ -196,7 +204,7 @@ export function PublicView() {
                       <div className="sb-qty">
                         <button onClick={() => changeQuantity(product, -1)}>−</button>
                         <span>{quantity}</span>
-                        <button onClick={() => changeQuantity(product, 1)} disabled={quantity >= product.stock}>+</button>
+                        <button onClick={() => changeQuantity(product, 1)} disabled={quantity >= MAX_QTY}>+</button>
                       </div>
                     ) : null}
                   </div>
@@ -275,7 +283,7 @@ export function PublicView() {
                       <span>{quantity}</span>
                       <button
                         onClick={() => changeQuantity(product, 1)}
-                        disabled={quantity >= product.stock}
+                        disabled={quantity >= MAX_QTY}
                         aria-label={`Una unidad más de ${product.name}`}
                       >
                         +
@@ -291,11 +299,20 @@ export function PublicView() {
             </div>
             <div className="sb-drawer-total"><span>Total</span><strong>{money.format(total)}</strong></div>
             <form onSubmit={placeOrder}>
-              <label>¿A nombre de quién?</label>
-              <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} minLength={2} required placeholder="Tu nombre" />
+              <label>Tu número de celular</label>
+              <input
+                value={customerPhone}
+                onChange={(event) => setCustomerPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                inputMode="numeric"
+                pattern="[0-9]{10}"
+                minLength={10}
+                maxLength={10}
+                required
+                placeholder="10 dígitos"
+              />
               <button className="primary-button" disabled={sending || !selections.length}>{sending ? "Enviando…" : "Enviar orden"}</button>
             </form>
-            <small>El método de pago se elige directamente en caja.</small>
+            <small>Con tu número acumulas visitas: cada 10 compras, una bebida es gratis. El método de pago se elige directamente en caja.</small>
           </div>
         </div>
       )}

@@ -52,7 +52,7 @@ export interface OrderItem {
 export interface Order {
   id: string;
   code: string;
-  customerName: string;
+  customerPhone: string;
   status: OrderStatus;
   paymentMethod: PaymentMethod | null;
   total: number;
