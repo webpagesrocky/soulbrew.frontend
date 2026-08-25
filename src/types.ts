@@ -34,6 +34,11 @@ export interface Product {
   cost: number;
   stock: number;
   active: boolean;
+  /**
+   * Interruptor manual, independiente del conteo de inventario: para el caso
+   * de "hoy no hay leche de avena" aunque el stock real siga en positivo.
+   */
+  soldOut: boolean;
 }
 
 export interface OrderItem {

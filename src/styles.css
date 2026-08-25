@@ -820,9 +820,17 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .reference-product > div:nth-child(2) > strong { display: block; margin-bottom: 4px; font-size: 13px; }
 .reference-product > div:nth-child(2) > small { display: block; overflow: hidden; color: #9d714f; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .reference-product > span { font-size: 10px; }
-.reference-product > span.available { color: #735036; }
-.reference-product > span.unavailable { color: #b26c55; }
 .reference-product > b { min-width: 42px; color: #8b644b; font-size: 10px; text-align: right; }
+
+/* Interruptor de disponibilidad: mismo lugar que antes ocupaba el badge de
+   sólo lectura, ahora clicable para marcar "agotado hoy" sin tocar stock. */
+.avail-toggle { border: 1px solid transparent; border-radius: 99px; padding: 3px 9px; font-size: 10px; font-weight: 700; background: transparent; white-space: nowrap; }
+.avail-toggle.available { color: #4c6b39; background: #eaf1e2; }
+.avail-toggle.available:hover { border-color: #4c6b39; }
+.avail-toggle.unavailable { color: #b26c55; background: #f7ece6; }
+.avail-toggle.unavailable.manual { color: #9a5a1f; background: #fbf0df; }
+.avail-toggle.unavailable.manual:hover { border-color: #9a5a1f; }
+.avail-toggle:disabled { cursor: not-allowed; opacity: .75; }
 
 .reference-shell .segmented { background: #f0ebe5; }
 .reference-shell .segmented button.active { background: var(--ref-brown); color: #fff; box-shadow: none; }

@@ -162,15 +162,18 @@ export function PublicView() {
           <div className="sb-product-grid">
             {categoryProducts.map((product) => {
               const quantity = cart[product.id] ?? 0;
+              // El interruptor manual de "agotado" (soldOut) cuenta igual que
+              // no tener existencias, aunque el stock real siga positivo.
+              const outOfStock = product.stock === 0 || product.soldOut;
               return (
-                <article className={`sb-product-card ${product.stock === 0 ? "sold-out" : ""}`} key={product.id}>
+                <article className={`sb-product-card ${outOfStock ? "sold-out" : ""}`} key={product.id}>
                   <div className="sb-product-art">
                     {product.imageUrl ? (
                       <img src={product.imageUrl} alt={product.name} loading="lazy" />
                     ) : (
                       (activeCategory?.emoji ?? "☕")
                     )}
-                    {product.stock > 0 && (
+                    {!outOfStock && (
                       <button
                         className="sb-add-btn"
                         onClick={() => changeQuantity(product, 1)}
@@ -187,7 +190,7 @@ export function PublicView() {
                       <strong>{money.format(product.price)}</strong>
                     </div>
                     <p>{product.description || "Preparado al momento con ingredientes de la casa."}</p>
-                    {product.stock === 0 ? (
+                    {outOfStock ? (
                       <span className="sb-stock-label">Agotado por hoy</span>
                     ) : quantity > 0 ? (
                       <div className="sb-qty">

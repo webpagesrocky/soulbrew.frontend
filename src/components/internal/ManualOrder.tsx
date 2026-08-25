@@ -147,7 +147,7 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
             <div className="manual-products">
               {shown.map((product) => {
                 const quantity = cart[product.id] ?? 0;
-                const soldOut = product.stock === 0;
+                const soldOut = product.stock === 0 || product.soldOut;
                 return (
                   <button
                     key={product.id}

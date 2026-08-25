@@ -58,6 +58,7 @@ function toProduct(snapshot: Snapshot): Product {
     cost: data.cost ?? 0,
     stock: data.stock,
     active: Boolean(data.active),
+    soldOut: Boolean(data.soldOut),
   };
 }
 
@@ -435,6 +436,7 @@ export async function createProduct(input: ProductInput) {
     ...input,
     stock: 0,
     active: true,
+    soldOut: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -442,6 +444,15 @@ export async function createProduct(input: ProductInput) {
 
 export async function updateProduct(id: string, input: ProductInput & { active: boolean }) {
   await updateDoc(doc(db, "products", id), { ...input, updatedAt: serverTimestamp() });
+}
+
+/**
+ * Marca o quita el "agotado" manual, sin tocar el resto del producto. Es
+ * independiente del stock real: sirve para el caso de "hoy no hay leche de
+ * avena" aunque el conteo de inventario siga en positivo.
+ */
+export async function setProductSoldOut(id: string, soldOut: boolean) {
+  await updateDoc(doc(db, "products", id), { soldOut, updatedAt: serverTimestamp() });
 }
 
 /**

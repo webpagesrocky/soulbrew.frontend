@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { createProduct, subscribeCategories, subscribeProducts } from "../../api/collections";
+import {
+  createProduct,
+  setProductSoldOut,
+  subscribeCategories,
+  subscribeProducts,
+} from "../../api/collections";
 import { errorMessage } from "../../api/errors";
 import { adjustInventory } from "../../api/transactions";
 import type { Category, Product, User } from "../../types";
@@ -42,8 +47,8 @@ export function CatalogPanel({ user }: { user: User }) {
   const visibleProducts = useMemo(
     () =>
       products.filter((product) => {
-        if (filter === "AVAILABLE") return product.active && product.stock > 0;
-        if (filter === "SOLD_OUT") return product.stock === 0;
+        if (filter === "AVAILABLE") return product.active && product.stock > 0 && !product.soldOut;
+        if (filter === "SOLD_OUT") return product.stock === 0 || product.soldOut;
         return true;
       }),
     [filter, products],
@@ -91,6 +96,19 @@ export function CatalogPanel({ user }: { user: User }) {
       setMessage("Producto creado con inventario inicial en cero.");
     } catch (reason) {
       setError(errorMessage(reason, "No se pudo crear el producto"));
+    }
+  }
+
+  async function toggleSoldOut(product: Product) {
+    try {
+      await setProductSoldOut(product.id, !product.soldOut);
+      setMessage(
+        product.soldOut
+          ? `"${product.name}" vuelve a estar disponible.`
+          : `"${product.name}" marcado como agotado.`,
+      );
+    } catch (reason) {
+      setError(errorMessage(reason, "No se pudo actualizar la disponibilidad"));
     }
   }
 
@@ -234,11 +252,32 @@ export function CatalogPanel({ user }: { user: User }) {
                         {money.format(product.price)}
                       </small>
                     </div>
-                    <span
-                      className={product.active && product.stock > 0 ? "available" : "unavailable"}
+                    <button
+                      type="button"
+                      className={`avail-toggle ${
+                        product.stock === 0
+                          ? "unavailable"
+                          : product.soldOut
+                            ? "unavailable manual"
+                            : "available"
+                      }`}
+                      onClick={() => void toggleSoldOut(product)}
+                      disabled={product.stock === 0}
+                      title={
+                        product.stock === 0
+                          ? "Sin existencia — ajusta el inventario para reactivarlo"
+                          : product.soldOut
+                            ? "Marcar disponible de nuevo"
+                            : "Marcar agotado por hoy"
+                      }
                     >
-                      ▣ {product.active && product.stock > 0 ? "Disponible" : "Agotado"}
-                    </span>
+                      ▣{" "}
+                      {product.stock === 0
+                        ? "Sin stock"
+                        : product.soldOut
+                          ? "Agotado (hoy)"
+                          : "Disponible"}
+                    </button>
                     <b>{product.stock} uds</b>
                     <button
                       className="product-edit"
