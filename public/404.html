@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Redirigiendo…</title>
+    <script type="text/javascript">
+      // GitHub Pages no tiene forma nativa de mandar toda ruta a index.html
+      // como sí hacen Firebase Hosting o Netlify: para cualquier URL que no
+      // sea un archivo real (ej. /soulbrew.frontend/interna), sirve este
+      // 404.html en su lugar. Aquí se codifica la ruta pedida en la query
+      // string y se manda a la raíz del sitio; el script en index.html la
+      // decodifica con history.replaceState antes de que arranque el router,
+      // así que React Router nunca se entera de que hubo un salto.
+      //
+      // segmentCount = 1 conserva el segmento "/soulbrew.frontend" del sitio.
+      var segmentCount = 1;
+      var l = window.location;
+      l.replace(
+        l.protocol + "//" + l.hostname + (l.port ? ":" + l.port : "") +
+        l.pathname.split("/").slice(0, 1 + segmentCount).join("/") + "/?/" +
+        l.pathname.slice(1).split("/").slice(segmentCount).join("/").replace(/&/g, "~and~") +
+        (l.search ? "&" + l.search.slice(1).replace(/&/g, "~and~") : "") +
+        l.hash
+      );
+    </script>
+  </head>
+  <body></body>
+</html>
