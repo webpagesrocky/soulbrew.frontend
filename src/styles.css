@@ -148,6 +148,24 @@ small { color: #6d746e; }
 .sb-drawer-line-total { justify-self: end; white-space: nowrap; }
 .sb-drawer-total { display: flex; justify-content: space-between; padding: 1rem 0; font-size: 1.05rem; font-weight: 700; }
 
+/* Tarjeta de puntos: aparece tras ordenar (si dieron teléfono) y en la
+   página compartible /tarjeta/:telefono. */
+.loyalty-card { background: #17120f; color: #fff; border-radius: 18px; padding: 1.75rem 1.5rem; text-align: center; }
+.loyalty-icon { width: 3rem; height: 3rem; margin: 0 auto .9rem; border-radius: 50%; background: #2f6fed; display: grid; place-items: center; }
+.loyalty-card h3 { margin: 0; font-size: 1.15rem; }
+.loyalty-sub { margin: .2rem 0 1.1rem; color: var(--sb-tan); font-size: .82rem; font-weight: 700; }
+.loyalty-cups { display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem; margin-bottom: 1rem; }
+.loyalty-cup { width: 1.9rem; height: 1.9rem; border-radius: 50%; border: 1.5px dashed rgba(255,255,255,.3); display: grid; place-items: center; color: #e08a3e; }
+.loyalty-cup.filled { border-style: solid; border-color: #e08a3e; background: rgba(224,138,62,.15); }
+.loyalty-count { margin: 0; font-size: 1.3rem; font-weight: 800; }
+.loyalty-hint { margin: .3rem 0 1.3rem; color: #cbbfb2; font-size: .85rem; }
+.loyalty-save { width: 100%; border: 1px solid rgba(255,255,255,.25); border-radius: 12px; padding: .8rem; background: transparent; color: #fff; font-weight: 700; font-size: .85rem; }
+.loyalty-save:hover { background: rgba(255,255,255,.08); }
+.loyalty-page-body { max-width: 400px; margin: 2.5rem auto; padding: 0 1.25rem; text-align: center; }
+.loyalty-page-back { display: inline-block; margin-top: 1.25rem; }
+.loyalty-modal { width: min(360px, 100%); animation: sb-sheet-up .22s ease-out; }
+.loyalty-modal-close { width: 100%; margin-top: .75rem; border: 0; border-radius: 12px; padding: .8rem; background: var(--sb-brown); color: #fff; font-weight: 700; }
+
 @media (min-width: 760px) {
   .sb-nav { display: flex; align-items: center; gap: 1.75rem; }
   .sb-product-grid { grid-template-columns: repeat(2, 1fr); }
@@ -200,6 +218,8 @@ small { color: #6d746e; }
 .order-top, .order-total { display: flex; justify-content: space-between; gap: 1rem; }
 .order-code { font-size: .65rem; letter-spacing: .09em; color: #7a817b; }
 .order-top h3 { margin: .25rem 0 0; }
+.order-phone { display: block; color: #7a817b; }
+.order-reward { margin: .5rem 0 0; padding: .4rem .6rem; border-radius: 8px; background: #fbf0df; color: #9a5a1f; font-size: .78rem; font-weight: 700; }
 .status { display: inline-block; align-self: start; border-radius: 99px; padding: .25rem .55rem; background: #eee; font: 750 .62rem/1 sans-serif; text-transform: uppercase; letter-spacing: .06em; }
 .status.pending, .status.open { background: #f2e7bd; color: #735d17; }
 .status.paid, .status.closed { background: #d9e8d3; color: #32533b; }

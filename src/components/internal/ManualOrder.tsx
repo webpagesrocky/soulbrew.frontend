@@ -38,6 +38,7 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [category, setCategory] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -93,12 +94,16 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
 
   async function submit(charge: PaymentMethod | null) {
     if (!selections.length) return setError("Agrega al menos un producto.");
-    if (!/^\d{10}$/.test(customerPhone)) return setError("Escribe el número de celular del cliente (10 dígitos).");
+    if (customerName.trim().length < 2) return setError("Escribe el nombre del cliente.");
+    if (customerPhone && !/^\d{10}$/.test(customerPhone)) {
+      return setError("El número de celular debe tener 10 dígitos.");
+    }
 
     setBusy(true);
     setError("");
     try {
       const order = await createPublicOrder({
+        customerName,
         customerPhone,
         items: selections.map((product) => ({
           productId: product.id,
@@ -106,8 +111,16 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
         })),
       });
 
+      const loyaltyNote = order.loyalty
+        ? order.loyalty.rewardEligible
+          ? " 🎉 Este pedido cumple 10 visitas: el café va gratis."
+          : ` Cliente lleva ${order.loyalty.visits} de 10 visitas.`
+        : "";
+
       if (!charge) {
-        onDone(`Pedido ${order.code} creado por ${money.format(order.total)}. Queda pendiente de cobro.`);
+        onDone(
+          `Pedido ${order.code} creado por ${money.format(order.total)}. Queda pendiente de cobro.${loyaltyNote}`,
+        );
         onClose();
         return;
       }
@@ -116,7 +129,7 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
       // abierta) el pedido ya quedó registrado y se puede cobrar desde la
       // lista, en vez de perderse lo capturado.
       await payOrder(order.id, charge, { uid: user.id, name: user.name });
-      onDone(`Pedido ${order.code} cobrado: ${money.format(order.total)}.`);
+      onDone(`Pedido ${order.code} cobrado: ${money.format(order.total)}.${loyaltyNote}`);
       onClose();
     } catch (reason) {
       setError(errorMessage(reason, "No se pudo crear el pedido"));
@@ -207,14 +220,20 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
               <strong>{money.format(total)}</strong>
             </div>
 
-            <label>Número de celular del cliente</label>
+            <label>¿A nombre de quién?</label>
+            <input
+              value={customerName}
+              onChange={(event) => setCustomerName(event.target.value)}
+              placeholder="Nombre del cliente"
+              minLength={2}
+            />
+            <label>Celular (opcional, para su tarjeta de puntos)</label>
             <input
               value={customerPhone}
               onChange={(event) => setCustomerPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
               inputMode="numeric"
               pattern="[0-9]{10}"
               placeholder="10 dígitos"
-              minLength={10}
               maxLength={10}
             />
 

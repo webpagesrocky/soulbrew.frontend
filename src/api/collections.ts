@@ -22,6 +22,7 @@ import { db } from "../firebase";
 import type {
   CashSession,
   Category,
+  Customer,
   InventoryMovement,
   Order,
   OrderStatus,
@@ -78,7 +79,9 @@ function toOrder(snapshot: Snapshot): Order {
   return {
     id: snapshot.id,
     code: data.code,
+    customerName: data.customerName,
     customerPhone: data.customerPhone,
+    rewardEligible: Boolean(data.rewardEligible),
     status: data.status as OrderStatus,
     paymentMethod: data.paymentMethod ?? null,
     total: data.total,
@@ -469,4 +472,30 @@ export async function deleteProduct(id: string) {
   const removed = await deleteMovementsOf("inventoryMovements", "productId", id);
   await deleteDoc(doc(db, "products", id));
   return removed;
+}
+
+/**
+ * Tarjeta de puntos en vivo por teléfono. Alimenta tanto el mensaje justo
+ * después de ordenar como la tarjeta compartible en /tarjeta/:telefono.
+ * `null` significa "todavía no existe" (nunca ha comprado con ese número).
+ */
+export function subscribeCustomer(
+  phone: string,
+  onData: (customer: Customer | null) => void,
+  onError: (error: Error) => void,
+) {
+  return onSnapshot(
+    doc(db, "customers", phone),
+    (snapshot) => {
+      if (!snapshot.exists()) return onData(null);
+      const data = snapshot.data();
+      onData({
+        phone: data.phone,
+        name: data.name,
+        visits: data.visits,
+        totalFreeEarned: data.totalFreeEarned,
+      });
+    },
+    onError,
+  );
 }

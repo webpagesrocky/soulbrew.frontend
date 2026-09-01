@@ -52,7 +52,11 @@ export interface OrderItem {
 export interface Order {
   id: string;
   code: string;
+  customerName: string;
+  /** Vacío si el cliente no lo dio: el teléfono es opcional, sólo alimenta la tarjeta de puntos. */
   customerPhone: string;
+  /** true si este pedido fue el que llegó a la décima visita de ese teléfono. */
+  rewardEligible: boolean;
   status: OrderStatus;
   paymentMethod: PaymentMethod | null;
   total: number;
@@ -62,6 +66,14 @@ export interface Order {
   paidAt: Date | null;
   cancelledAt: Date | null;
   cancellationReason: string | null;
+}
+
+/** Tarjeta de puntos: doc id = teléfono. Cada 10 visitas se gana un café gratis. */
+export interface Customer {
+  phone: string;
+  name: string;
+  visits: number;
+  totalFreeEarned: number;
 }
 
 export interface CashTotals {

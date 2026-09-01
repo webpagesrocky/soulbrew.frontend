@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { subscribeCategories, subscribePublicProducts } from "../api/collections";
 import { errorMessage } from "../api/errors";
-import { createPublicOrder } from "../api/transactions";
+import { createPublicOrder, type LoyaltyResult } from "../api/transactions";
 import { Icon } from "../components/Icon";
+import { LoyaltyCard } from "../components/LoyaltyCard";
 import type { Category, Product, ProductCategory } from "../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -20,6 +21,7 @@ export function PublicView() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [category, setCategory] = useState<ProductCategory | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -27,6 +29,7 @@ export function PublicView() {
   const [sending, setSending] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [logoBroken, setLogoBroken] = useState(false);
+  const [loyalty, setLoyalty] = useState<{ name: string; phone: string; result: LoyaltyResult } | null>(null);
 
   // El menú se mantiene en vivo: si en el panel interno agotan o desactivan un
   // producto, desaparece de la carta sin que nadie recargue la página.
@@ -90,11 +93,15 @@ export function PublicView() {
   async function placeOrder(event: React.FormEvent) {
     event.preventDefault();
     if (!selections.length) return setError("Elige al menos un producto.");
-    if (!/^\d{10}$/.test(customerPhone)) return setError("Escribe un número de celular a 10 dígitos.");
+    if (customerName.trim().length < 2) return setError("Escribe tu nombre.");
+    if (customerPhone && !/^\d{10}$/.test(customerPhone)) {
+      return setError("El número de celular debe tener 10 dígitos.");
+    }
     setSending(true);
     setError("");
     try {
       const order = await createPublicOrder({
+        customerName,
         customerPhone,
         items: selections.map((product) => ({
           productId: product.id,
@@ -102,6 +109,10 @@ export function PublicView() {
         })),
       });
       setMessage(`¡Orden ${order.code} recibida! Paga ${money.format(order.total)} en caja.`);
+      if (order.loyalty) {
+        setLoyalty({ name: order.customerName, phone: order.customerPhone, result: order.loyalty });
+      }
+      setCustomerName("");
       setCustomerPhone("");
       setCart({});
       setCartOpen(false);
@@ -299,20 +310,45 @@ export function PublicView() {
             </div>
             <div className="sb-drawer-total"><span>Total</span><strong>{money.format(total)}</strong></div>
             <form onSubmit={placeOrder}>
-              <label>Tu número de celular</label>
+              <label>Tu nombre</label>
+              <input
+                value={customerName}
+                onChange={(event) => setCustomerName(event.target.value)}
+                minLength={2}
+                required
+                placeholder="¿A nombre de quién?"
+              />
+              <label>Tu número de celular (opcional)</label>
               <input
                 value={customerPhone}
                 onChange={(event) => setCustomerPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
                 inputMode="numeric"
                 pattern="[0-9]{10}"
-                minLength={10}
                 maxLength={10}
-                required
                 placeholder="10 dígitos"
               />
               <button className="primary-button" disabled={sending || !selections.length}>{sending ? "Enviando…" : "Enviar orden"}</button>
             </form>
-            <small>Con tu número acumulas visitas: cada 10 compras, una bebida es gratis. El método de pago se elige directamente en caja.</small>
+            <small>
+              Danos tu celular y activa tu tarjeta de puntos: cada 10 compras, una bebida sale gratis. El
+              método de pago se elige directamente en caja.
+            </small>
+          </div>
+        </div>
+      )}
+
+      {loyalty && (
+        <div className="sb-drawer-backdrop" onClick={() => setLoyalty(null)}>
+          <div className="loyalty-modal" onClick={(event) => event.stopPropagation()}>
+            <LoyaltyCard
+              name={loyalty.name}
+              phone={loyalty.phone}
+              visits={loyalty.result.visits}
+              rewardEligible={loyalty.result.rewardEligible}
+            />
+            <button type="button" className="loyalty-modal-close" onClick={() => setLoyalty(null)}>
+              Listo
+            </button>
           </div>
         </div>
       )}

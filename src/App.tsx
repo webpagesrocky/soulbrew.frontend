@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { CustomerCardView } from "./views/CustomerCardView";
 import { InternalView } from "./views/InternalView";
 import { LoginView } from "./views/LoginView";
 import { PublicView } from "./views/PublicView";
@@ -14,6 +15,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/" element={<PublicView />} />
+          <Route path="/tarjeta/:phone" element={<CustomerCardView />} />
           <Route path="/login" element={<LoginView />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/interna" element={<InternalView />} />

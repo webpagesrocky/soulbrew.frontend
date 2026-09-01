@@ -41,15 +41,30 @@ function productRef(productId: string): DocumentReference {
   return doc(db, "products", productId);
 }
 
+function customerRef(phone: string): DocumentReference {
+  return doc(db, "customers", phone);
+}
+
 export interface CreateOrderInput {
+  customerName: string;
+  /** Opcional: cadena vacía si el cliente no quiso darlo. */
   customerPhone: string;
   items: Array<{ productId: string; quantity: number }>;
+}
+
+export interface LoyaltyResult {
+  /** Visitas acumuladas después de este pedido (1-10; 10 = éste ya es el gratis). */
+  visits: number;
+  rewardEligible: boolean;
 }
 
 const PHONE_PATTERN = /^\d{10}$/;
 
 export async function createPublicOrder(input: CreateOrderInput) {
-  if (!PHONE_PATTERN.test(input.customerPhone)) {
+  const customerName = input.customerName.trim();
+  if (customerName.length < 2) throw new OrderError("Escribe el nombre del cliente.");
+  const customerPhone = input.customerPhone.trim();
+  if (customerPhone && !PHONE_PATTERN.test(customerPhone)) {
     throw new OrderError("El número de celular debe tener 10 dígitos.");
   }
   const aggregated = new Map<string, number>();
@@ -64,10 +79,12 @@ export async function createPublicOrder(input: CreateOrderInput) {
 
   const counterRef = doc(db, "counters", "orders");
   const orderRef = doc(collection(db, "orders"));
+  const custRef = customerPhone ? customerRef(customerPhone) : null;
 
   return runTransaction(db, async (tx) => {
     const productSnaps = await Promise.all(productIds.map((id) => tx.get(productRef(id))));
     const counterSnap = await tx.get(counterRef);
+    const custSnap = custRef ? await tx.get(custRef) : null;
 
     let total = 0;
     const items: OrderItem[] = [];
@@ -88,11 +105,33 @@ export async function createPublicOrder(input: CreateOrderInput) {
     const sequence = ((counterSnap.data()?.value as number | undefined) ?? 0) + 1;
     const code = `SB-${String(sequence).padStart(6, "0")}`;
 
+    // Tarjeta de puntos: sólo se toca si dieron teléfono. Sube de 1 en 1 y
+    // se reinicia a 0 al llegar a 10, que es el pedido que sale gratis.
+    let loyalty: LoyaltyResult | null = null;
+    if (custRef) {
+      const previousVisits = (custSnap?.data()?.visits as number | undefined) ?? 0;
+      const previousFree = (custSnap?.data()?.totalFreeEarned as number | undefined) ?? 0;
+      const rawVisits = previousVisits + 1;
+      const rewardEligible = rawVisits === 10;
+      const storedVisits = rewardEligible ? 0 : rawVisits;
+
+      tx.set(custRef, {
+        phone: customerPhone,
+        name: customerName,
+        visits: storedVisits,
+        totalFreeEarned: previousFree + (rewardEligible ? 1 : 0),
+      });
+
+      loyalty = { visits: rawVisits, rewardEligible };
+    }
+
     tx.set(counterRef, { value: sequence });
     tx.set(orderRef, {
       code,
       sequence,
-      customerPhone: input.customerPhone,
+      customerName,
+      customerPhone,
+      rewardEligible: loyalty?.rewardEligible ?? false,
       status: "PENDING",
       paymentMethod: null,
       total,
@@ -105,7 +144,7 @@ export async function createPublicOrder(input: CreateOrderInput) {
       cancelledAt: null,
     });
 
-    return { id: orderRef.id, code, customerPhone: input.customerPhone, status: "PENDING" as const, total };
+    return { id: orderRef.id, code, customerName, customerPhone, status: "PENDING" as const, total, loyalty };
   });
 }
 

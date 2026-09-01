@@ -99,7 +99,7 @@ export function HistoryPanel({ user }: { user: User }) {
                   <div>
                     <strong>{order.code}</strong>
                     <small>
-                      {order.customerPhone} ·{" "}
+                      {order.customerName} ·{" "}
                       {order.createdAt?.toLocaleTimeString("es-MX", {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -131,7 +131,8 @@ export function HistoryPanel({ user }: { user: User }) {
               <p className="eyebrow">Recibo</p>
               <h2>{openReceipt.code}</h2>
               <p>
-                {openReceipt.customerPhone}
+                {openReceipt.customerName}
+                {openReceipt.customerPhone && ` · ${openReceipt.customerPhone}`}
                 <br />
                 {openReceipt.createdAt?.toLocaleString("es-MX")}
               </p>

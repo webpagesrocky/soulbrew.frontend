@@ -70,7 +70,7 @@ export function OrdersPanel({ user }: { user: User }) {
 
   async function remove(order: Order) {
     const confirmed = window.confirm(
-      `¿Borrar el pedido ${order.code} de ${order.customerPhone}?\n\n` +
+      `¿Borrar el pedido ${order.code} de ${order.customerName}?\n\n` +
         "Desaparece del historial y del reporte semanal. Si ya estaba pagado, " +
         "cancelar es mejor que borrar: cancelar devuelve el inventario, borrar no.",
     );
@@ -117,12 +117,16 @@ export function OrdersPanel({ user }: { user: User }) {
             <div className="order-top">
               <div>
                 <span className="order-code">{order.code}</span>
-                <h3>{order.customerPhone}</h3>
+                <h3>{order.customerName}</h3>
+                {order.customerPhone && <small className="order-phone">{order.customerPhone}</small>}
               </div>
               <span className={`status ${order.status.toLowerCase()}`}>
                 {statusLabel[order.status]}
               </span>
             </div>
+            {order.rewardEligible && (
+              <p className="order-reward">🎉 Café de regalo: cumple 10 visitas</p>
+            )}
             <div className="order-items">
               {order.items.map((item) => (
                 <p key={item.productId}>
