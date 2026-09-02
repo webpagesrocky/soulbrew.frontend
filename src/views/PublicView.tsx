@@ -338,11 +338,10 @@ export function PublicView() {
       )}
 
       {loyalty && (
-        <div className="sb-drawer-backdrop" onClick={() => setLoyalty(null)}>
+        <div className="loyalty-backdrop" onClick={() => setLoyalty(null)}>
           <div className="loyalty-modal" onClick={(event) => event.stopPropagation()}>
             <LoyaltyCard
               name={loyalty.name}
-              phone={loyalty.phone}
               visits={loyalty.result.visits}
               rewardEligible={loyalty.result.rewardEligible}
             />

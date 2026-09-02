@@ -38,12 +38,7 @@ export function CustomerCardView() {
           </p>
         )}
         {customer && (
-          <LoyaltyCard
-            name={customer.name}
-            phone={customer.phone}
-            visits={customer.visits}
-            rewardEligible={false}
-          />
+          <LoyaltyCard name={customer.name} visits={customer.visits} rewardEligible={false} />
         )}
         <Link to="/" className="sb-btn sb-btn-outline loyalty-page-back">
           Ver el menú

@@ -366,10 +366,6 @@ export async function deleteSupply(id: string) {
 }
 
 /** Borra un pedido. Sale del historial y del reporte; no descuadra cortes ya cerrados. */
-export async function deleteOrder(id: string) {
-  await deleteDoc(doc(db, "orders", id));
-}
-
 /** Borra un corte de caja. Las reglas sólo lo permiten si ya está cerrado. */
 export async function deleteCashSession(id: string) {
   await deleteDoc(doc(db, "cashSessions", id));

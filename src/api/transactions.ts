@@ -45,6 +45,22 @@ function customerRef(phone: string): DocumentReference {
   return doc(db, "customers", phone);
 }
 
+/**
+ * Le resta a la tarjeta de puntos el punto que un pedido había sumado, para
+ * cuando ese pedido se cancela o se borra: cumple lo mismo al revés que el
+ * incremento de `createPublicOrder` (mismo módulo 10), y las reglas de
+ * Firestore exigen que la resta ocurra en la misma transacción.
+ */
+async function reverseLoyalty(tx: Transaction, phone: string) {
+  if (!phone) return;
+  const snap = await tx.get(customerRef(phone));
+  if (!snap.exists()) return;
+  const data = snap.data() as { visits: number; totalFreeEarned: number; name: string };
+  const newVisits = (data.visits + 9) % 10;
+  const newFree = data.totalFreeEarned - (data.visits === 0 ? 1 : 0);
+  tx.update(customerRef(phone), { visits: newVisits, totalFreeEarned: newFree });
+}
+
 export interface CreateOrderInput {
   customerName: string;
   /** Opcional: cadena vacía si el cliente no quiso darlo. */
@@ -132,6 +148,9 @@ export async function createPublicOrder(input: CreateOrderInput) {
       customerName,
       customerPhone,
       rewardEligible: loyalty?.rewardEligible ?? false,
+      // Se pone en true cuando cancelar/borrar este pedido ya le restó el
+      // punto de la tarjeta al cliente, para no restarlo dos veces.
+      loyaltyReverted: false,
       status: "PENDING",
       paymentMethod: null,
       total,
@@ -190,6 +209,8 @@ export async function cancelOrder(orderId: string, reason: string, actor: Actor)
       status: string;
       items: OrderItem[];
       cashSessionId: string | null;
+      customerPhone?: string;
+      loyaltyReverted?: boolean;
     };
     if (order.status === "CANCELLED") throw new OrderError("La orden ya está cancelada");
     if (order.items.length > MAX_ITEMS) throw new OrderError("Orden con demasiados productos para procesar");
@@ -205,11 +226,18 @@ export async function cancelOrder(orderId: string, reason: string, actor: Actor)
       ? await Promise.all(order.items.map((item) => tx.get(productRef(item.productId))))
       : [];
 
+    // Todas las lecturas de la transacción ya ocurrieron arriba (incluida la
+    // que hace reverseLoyalty): a partir de aquí sólo hay escrituras.
+    if (!order.loyaltyReverted) {
+      await reverseLoyalty(tx, order.customerPhone ?? "");
+    }
+
     tx.update(orderRef, {
       status: "CANCELLED",
       cancelledBy: actor.uid,
       cancellationReason: reason,
       cancelledAt: serverTimestamp(),
+      loyaltyReverted: true,
     });
     if (wasPaid) {
       order.items.forEach((item, index) => {
@@ -219,6 +247,26 @@ export async function cancelOrder(orderId: string, reason: string, actor: Actor)
     }
 
     return { id: orderId, status: "CANCELLED" as const, reason };
+  });
+}
+
+/**
+ * Si el pedido nunca se canceló primero (se borra directo, pendiente o
+ * pagado), el punto de la tarjeta de puntos que había sumado se le resta al
+ * cliente aquí; si ya se había cancelado, el punto ya se devolvió entonces.
+ */
+export async function deleteOrder(orderId: string) {
+  const orderRef = doc(db, "orders", orderId);
+
+  return runTransaction(db, async (tx) => {
+    const orderSnap = await tx.get(orderRef);
+    if (!orderSnap.exists()) throw new OrderError("Orden no encontrada");
+    const order = orderSnap.data() as { customerPhone?: string; loyaltyReverted?: boolean };
+
+    if (!order.loyaltyReverted) {
+      await reverseLoyalty(tx, order.customerPhone ?? "");
+    }
+    tx.delete(orderRef);
   });
 }
 

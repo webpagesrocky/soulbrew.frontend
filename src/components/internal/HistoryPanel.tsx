@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { deleteOrder, startOfDay, subscribeOrdersBetween } from "../../api/collections";
+import { startOfDay, subscribeOrdersBetween } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
+import { deleteOrder } from "../../api/transactions";
 import type { Order, User } from "../../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });

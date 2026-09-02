@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { deleteOrder, startOfDay, subscribeOrdersBetween } from "../../api/collections";
+import { startOfDay, subscribeOrdersBetween } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
-import { cancelOrder, payOrder } from "../../api/transactions";
+import { cancelOrder, deleteOrder, payOrder } from "../../api/transactions";
 import { ManualOrder } from "./ManualOrder";
 import type { Order, OrderStatus, PaymentMethod, User } from "../../types";
 
