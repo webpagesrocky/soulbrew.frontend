@@ -729,6 +729,8 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .inventory-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 18px; align-items: start; margin-bottom: 20px; }
 .stock-head { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(60px, 1fr)); }
 .supply-head { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(58px, 1fr)) auto; }
+.forecast-head { grid-template-columns: minmax(0, 2fr) repeat(6, minmax(52px, 1fr)); }
+.forecast-flag { color: #b1492f; font-weight: 700; }
 .supply-off { color: #b2452a; font-size: 10px; }
 .supply-forms { display: grid; gap: 16px; align-content: start; }
 .supply-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -801,13 +803,21 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 
 /* Gestión de categorías */
 .category-list { display: grid; gap: 4px; margin-bottom: 12px; }
-.category-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto auto; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--ref-border); }
+.category-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto auto auto; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--ref-border); }
 .category-row:last-child { border-bottom: 0; }
 .category-emoji { font-size: 17px; text-align: center; }
 .category-row > div { min-width: 0; }
 .category-row strong { display: block; font-size: 13px; }
 .category-row small { color: #9b765c; font-size: 11px; }
 .category-row button { border: 0; border-radius: 99px; padding: 4px 9px; font-size: 10px; font-weight: 750; }
+
+/* Editor de receta: nombre del insumo, cantidad, unidad y quitar. */
+.recipe-rows { margin: 4px 0 10px; }
+.recipe-row { display: grid; grid-template-columns: minmax(0, 1fr) 82px 44px auto; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--ref-border); }
+.recipe-row:last-child { border-bottom: 0; }
+.recipe-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recipe-row input { margin: 0; text-align: right; }
+.recipe-unit { color: #9b765c; font-size: 11px; }
 .pill-on { background: #e6efdd; color: #4c6b39; }
 .pill-off { background: #f0ebe5; color: #8a7361; }
 .category-delete { background: transparent; color: #b26c55; padding: 4px 6px; }

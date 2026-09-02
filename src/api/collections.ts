@@ -28,6 +28,7 @@ import type {
   OrderStatus,
   Product,
   ProductCategory,
+  RecipeItem,
   Supply,
   SupplyMovement,
   User,
@@ -71,6 +72,7 @@ function toCategory(snapshot: Snapshot): Category {
     emoji: data.emoji ?? "",
     order: data.order ?? 0,
     active: Boolean(data.active),
+    recipe: data.recipe ?? [],
   };
 }
 
@@ -384,6 +386,16 @@ export interface CategoryInput {
   emoji: string;
   order: number;
   active: boolean;
+  recipe: RecipeItem[];
+}
+
+/**
+ * Guarda sólo la receta, sin tocar el resto de la ficha de la categoría.
+ * `updateCategory` reescribe el documento completo, así que llamarlo desde el
+ * editor de recetas obligaría a reenviar nombre, emoji y orden.
+ */
+export async function setCategoryRecipe(id: string, recipe: RecipeItem[]) {
+  await updateDoc(doc(db, "categories", id), { recipe });
 }
 
 /**

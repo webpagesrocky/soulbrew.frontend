@@ -2,6 +2,7 @@ import { useState } from "react";
 import { categoryId, createCategory, deleteCategory, updateCategory } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
 import type { Category, Product } from "../../types";
+import { RecipeEditor } from "./RecipeEditor";
 
 interface Props {
   categories: Category[];
@@ -12,6 +13,7 @@ interface Props {
 
 export function CategoryManager({ categories, products, onMessage, onError }: Props) {
   const [busy, setBusy] = useState(false);
+  const [recipeOf, setRecipeOf] = useState<Category | null>(null);
 
   const usageCount = (id: string) => products.filter((product) => product.category === id).length;
 
@@ -32,6 +34,8 @@ export function CategoryManager({ categories, products, onMessage, onError }: Pr
         emoji: String(data.get("emoji") ?? "").trim(),
         order: categories.length + 1,
         active: true,
+        // La receta se arma después, cuando ya existen los insumos.
+        recipe: [],
       });
       form.reset();
       onMessage(`Categoría "${name}" creada.`);
@@ -68,6 +72,7 @@ export function CategoryManager({ categories, products, onMessage, onError }: Pr
   }
 
   return (
+    <>
     <form className="reference-card compact-form" onSubmit={add}>
       <h2>Categorías</h2>
       <p>Se muestran como pestañas en el menú público.</p>
@@ -80,8 +85,21 @@ export function CategoryManager({ categories, products, onMessage, onError }: Pr
               <span className="category-emoji">{category.emoji || "•"}</span>
               <div>
                 <strong>{category.name}</strong>
-                <small>{inUse === 1 ? "1 producto" : `${inUse} productos`}</small>
+                <small>
+                  {inUse === 1 ? "1 producto" : `${inUse} productos`}
+                  {category.recipe.length > 0 &&
+                    ` · ${category.recipe.length} ${category.recipe.length === 1 ? "insumo" : "insumos"}`}
+                </small>
               </div>
+              <button
+                type="button"
+                className={category.recipe.length ? "pill-on" : "pill-off"}
+                disabled={busy}
+                title="Insumos que consume cada unidad vendida"
+                onClick={() => setRecipeOf(category)}
+              >
+                Receta
+              </button>
               <button
                 type="button"
                 className={category.active ? "pill-on" : "pill-off"}
@@ -113,5 +131,17 @@ export function CategoryManager({ categories, products, onMessage, onError }: Pr
         <button className="reference-primary" disabled={busy}>+ Agregar</button>
       </div>
     </form>
+
+    {/* Fuera del <form> a propósito: dentro, un Enter en la cantidad de un
+        ingrediente enviaría el alta de categoría en vez de guardar la receta. */}
+    {recipeOf && (
+      <RecipeEditor
+        category={recipeOf}
+        onClose={() => setRecipeOf(null)}
+        onSaved={onMessage}
+        onError={onError}
+      />
+    )}
+    </>
   );
 }

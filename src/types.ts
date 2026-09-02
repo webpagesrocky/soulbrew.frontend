@@ -5,12 +5,30 @@ export type OrderStatus = "PENDING" | "PAID" | "CANCELLED";
 /** Id del documento en `categories`. Ya no es una lista fija. */
 export type ProductCategory = string;
 
+/**
+ * Un ingrediente de la receta de una categoría: cuánto de un insumo consume
+ * cada unidad vendida. `supplyName` y `unit` van copiados para poder mostrar
+ * la receta sin tener que cruzar con la lista de insumos.
+ */
+export interface RecipeItem {
+  supplyId: string;
+  supplyName: string;
+  unit: string;
+  /** Cantidad por unidad vendida (250 ml de leche por bebida, 1 vaso...). */
+  quantity: number;
+}
+
 export interface Category {
   id: ProductCategory;
   name: string;
   emoji: string;
   order: number;
   active: boolean;
+  /**
+   * Insumos que consume cada unidad vendida de esta categoría. Vacío en las
+   * categorías creadas antes de las recetas: entonces vender no descuenta nada.
+   */
+  recipe: RecipeItem[];
 }
 
 export interface User {

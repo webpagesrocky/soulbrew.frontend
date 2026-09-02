@@ -10,6 +10,7 @@ import { adjustInventory } from "../../api/transactions";
 import type { InventoryMovement, Order, Product, User } from "../../types";
 import { Icon } from "../Icon";
 import { SuppliesSection } from "./SuppliesSection";
+import { SupplyForecast } from "./SupplyForecast";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
@@ -36,7 +37,7 @@ function addDays(date: Date, days: number): Date {
  */
 export function ReportsPanel({ user }: { user: User }) {
   const [view, setView] = useState<"sales" | "inventory">("sales");
-  const [inventoryTab, setInventoryTab] = useState<"supplies" | "menu">("supplies");
+  const [inventoryTab, setInventoryTab] = useState<"forecast" | "supplies" | "menu">("forecast");
   const [weekOffset, setWeekOffset] = useState(0);
   const [orders, setOrders] = useState<Order[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
@@ -317,6 +318,12 @@ export function ReportsPanel({ user }: { user: User }) {
         <>
           <div className="inventory-tabs">
             <button
+              className={inventoryTab === "forecast" ? "active" : ""}
+              onClick={() => setInventoryTab("forecast")}
+            >
+              Qué comprar
+            </button>
+            <button
               className={inventoryTab === "supplies" ? "active" : ""}
               onClick={() => setInventoryTab("supplies")}
             >
@@ -329,6 +336,8 @@ export function ReportsPanel({ user }: { user: User }) {
               Productos del menú
             </button>
           </div>
+
+          {inventoryTab === "forecast" && <SupplyForecast onError={setError} />}
 
           {inventoryTab === "supplies" && (
             <SuppliesSection

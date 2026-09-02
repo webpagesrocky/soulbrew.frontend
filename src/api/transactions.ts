@@ -7,11 +7,13 @@ import {
   runTransaction,
   serverTimestamp,
   where,
+  type DocumentData,
   type DocumentReference,
+  type DocumentSnapshot,
   type Transaction,
 } from "firebase/firestore";
 import { db } from "../firebase";
-import type { OrderItem, PaymentMethod } from "../types";
+import type { OrderItem, PaymentMethod, RecipeItem } from "../types";
 
 /**
  * Escrituras que mueven dinero o inventario.
@@ -43,6 +45,70 @@ function productRef(productId: string): DocumentReference {
 
 function customerRef(phone: string): DocumentReference {
   return doc(db, "customers", phone);
+}
+
+/**
+ * Redondeo a 2 decimales. Sumar o restar 0.1 repetidas veces en punto flotante
+ * deja residuos como 2.7999999999999994 en la existencia de un insumo.
+ */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Traduce los renglones de una orden a cuánto insumo mueve, siguiendo la
+ * receta de la categoría de cada producto (un matcha = 250 ml de leche...).
+ *
+ * Hace sus propias lecturas en cascada (categorías y luego insumos), así que
+ * tiene que llamarse antes de la primera escritura de la transacción:
+ * Firestore no permite leer después de escribir.
+ */
+async function readSupplyUsage(
+  tx: Transaction,
+  items: OrderItem[],
+  productSnaps: Array<DocumentSnapshot<DocumentData>>,
+) {
+  const categoryIds = [
+    ...new Set(
+      productSnaps
+        .map((snap) => snap.data()?.category as string | undefined)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  if (!categoryIds.length) return [];
+
+  const categorySnaps = await Promise.all(categoryIds.map((id) => tx.get(doc(db, "categories", id))));
+  const recipeOf = new Map<string, RecipeItem[]>(
+    categoryIds.map((id, index) => [id, (categorySnaps[index]!.data()?.recipe ?? []) as RecipeItem[]]),
+  );
+
+  // Se acumula por insumo, no por renglón: dos bebidas de la misma categoría
+  // (o de dos categorías que comparten la leche) tienen que descontar de un
+  // solo documento, porque Firestore rechaza dos escrituras al mismo doc.
+  const needed = new Map<string, number>();
+  items.forEach((item, index) => {
+    const category = productSnaps[index]?.data()?.category as string | undefined;
+    for (const ingredient of recipeOf.get(category ?? "") ?? []) {
+      const total = (needed.get(ingredient.supplyId) ?? 0) + ingredient.quantity * item.quantity;
+      needed.set(ingredient.supplyId, total);
+    }
+  });
+
+  const entries = [...needed.entries()];
+  if (!entries.length) return [];
+
+  const supplySnaps = await Promise.all(entries.map(([id]) => tx.get(doc(db, "supplies", id))));
+
+  return entries
+    .map(([id, quantity], index) => ({ id, quantity, snap: supplySnaps[index]! }))
+    // Un insumo borrado deja el renglón de la receta apuntando a nada: se
+    // ignora en vez de tumbar el cobro.
+    .filter((row) => row.snap.exists())
+    .map((row) => ({
+      ref: doc(db, "supplies", row.id),
+      quantity: row.quantity,
+      stock: (row.snap.data()!.stock as number) ?? 0,
+    }));
 }
 
 /**
@@ -188,12 +254,18 @@ export async function payOrder(orderId: string, paymentMethod: PaymentMethod, ac
     if (order.items.length > MAX_ITEMS) throw new OrderError("Orden con demasiados productos para procesar");
 
     const productSnaps = await Promise.all(order.items.map((item) => tx.get(productRef(item.productId))));
+    const supplyUsage = await readSupplyUsage(tx, order.items, productSnaps);
 
     tx.update(orderRef, { status: "PAID", paymentMethod, cashSessionId: sessionId, paidAt: serverTimestamp() });
     order.items.forEach((item, index) => {
       const stock = productSnaps[index]!.data()!.stock as number;
       tx.update(productRef(item.productId), { stock: stock - item.quantity });
     });
+    for (const row of supplyUsage) {
+      // Nunca baja de cero ni bloquea el cobro: si el conteo de barra quedó
+      // desfasado, eso se corrige en inventario, no negándose a cobrar.
+      tx.update(row.ref, { stock: round2(Math.max(0, row.stock - row.quantity)) });
+    }
 
     return { id: orderId, status: "PAID" as const, paymentMethod, cashSessionId: sessionId, total: order.total };
   });
@@ -225,6 +297,9 @@ export async function cancelOrder(orderId: string, reason: string, actor: Actor)
     const productSnaps = wasPaid
       ? await Promise.all(order.items.map((item) => tx.get(productRef(item.productId))))
       : [];
+    // Los insumos sólo se consumieron si la orden llegó a cobrarse, así que
+    // sólo entonces hay algo que devolver.
+    const supplyUsage = wasPaid ? await readSupplyUsage(tx, order.items, productSnaps) : [];
 
     // Todas las lecturas de la transacción ya ocurrieron arriba (incluida la
     // que hace reverseLoyalty): a partir de aquí sólo hay escrituras.
@@ -244,6 +319,9 @@ export async function cancelOrder(orderId: string, reason: string, actor: Actor)
         const stock = productSnaps[index]!.data()!.stock as number;
         tx.update(productRef(item.productId), { stock: stock + item.quantity });
       });
+      for (const row of supplyUsage) {
+        tx.update(row.ref, { stock: round2(row.stock + row.quantity) });
+      }
     }
 
     return { id: orderId, status: "CANCELLED" as const, reason };
@@ -408,9 +486,7 @@ export async function moveSupply(
     if (!snap.exists()) throw new OrderError("Insumo no encontrado");
     const supply = snap.data() as { name: string; unit: string; stock: number };
 
-    // Se redondea a 2 decimales: sumar 0.1 repetidas veces en punto flotante
-    // deja residuos como 2.7999999999999994 en la existencia.
-    const stock = Math.round((supply.stock + quantityChange) * 100) / 100;
+    const stock = round2(supply.stock + quantityChange);
     if (stock < 0) {
       throw new OrderError(`No hay suficiente ${supply.name} en existencia`);
     }
