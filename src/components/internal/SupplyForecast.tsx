@@ -142,7 +142,7 @@ export function SupplyForecast({ onError }: Props) {
     // rango (la suscripción trae desde `from` sin tope superior).
     const purchased = new Map<string, number>();
     for (const movement of movements) {
-      if (movement.quantityChange <= 0) continue;
+      if (movement.quantityChange <= 0 || movement.type === "WASTE") continue;
       const at = movement.createdAt;
       if (!at || at < range.from || at >= range.to) continue;
       purchased.set(movement.supplyId, (purchased.get(movement.supplyId) ?? 0) + movement.quantityChange);

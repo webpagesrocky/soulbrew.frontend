@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import {
   startOfDay,
   subscribeCategories,
-  subscribeInventoryMovements,
   subscribeOrdersBetween,
   subscribeProducts,
   subscribeSupplies,
+  subscribeSupplyMovements,
 } from "../../api/collections";
-import { costTable } from "../../api/costing";
+import { costTable, unitCost } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
-import type { Category, InventoryMovement, Order, Product, Supply, User } from "../../types";
+import type { Category, Order, Product, Supply, SupplyMovement, User } from "../../types";
 import { Icon } from "../Icon";
 import { SuppliesSection } from "./SuppliesSection";
 import { SupplyForecast } from "./SupplyForecast";
@@ -42,7 +42,7 @@ export function ReportsPanel({ user }: { user: User }) {
   const [inventoryTab, setInventoryTab] = useState<"forecast" | "supplies">("forecast");
   const [weekOffset, setWeekOffset] = useState(0);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [movements, setMovements] = useState<InventoryMovement[]>([]);
+  const [movements, setMovements] = useState<SupplyMovement[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [supplies, setSupplies] = useState<Supply[]>([]);
@@ -67,7 +67,7 @@ export function ReportsPanel({ user }: { user: User }) {
 
   useEffect(
     () =>
-      subscribeInventoryMovements(
+      subscribeSupplyMovements(
         setMovements,
         (reason) => setError(errorMessage(reason, "No se pudo cargar el inventario")),
         range.from,
@@ -141,16 +141,17 @@ export function ReportsPanel({ user }: { user: User }) {
       }
     }
 
-    // La merma se valora al costo: es lo que realmente se perdió, no lo que se
-    // habría cobrado por algo que nunca se vendió.
+    // La merma se valora al costo del insumo perdido: la leche que se derramó,
+    // el vaso que se rompió. No es lo que se habría cobrado por una bebida que
+    // nunca se vendió.
+    const costOfSupply = new Map(supplies.map((supply) => [supply.id, unitCost(supply)]));
     const wasteMovements = movements.filter((movement) => movement.type === "WASTE");
-    const wasteUnits = wasteMovements.reduce((sum, m) => sum + Math.abs(m.quantityChange), 0);
     const wasteCost = wasteMovements.reduce(
-      (sum, m) => sum + Math.abs(m.quantityChange) * (costOf.get(m.productId) ?? 0),
+      (sum, m) => sum + Math.abs(m.quantityChange) * (costOfSupply.get(m.supplyId) ?? 0),
       0,
     );
 
-    const adjustments = movements.filter((movement) => movement.type === "ADJUSTMENT");
+    const adjustments = movements.filter((movement) => movement.type !== "WASTE");
     const cancelled = orders.filter((order) => order.status === "CANCELLED");
 
     return {
@@ -163,7 +164,6 @@ export function ReportsPanel({ user }: { user: User }) {
       byDay: [...byDay.entries()],
       topProducts: [...byProduct.values()].sort((a, b) => b.revenue - a.revenue),
       wasteMovements,
-      wasteUnits,
       wasteCost,
       adjustments,
       cancelledCount: cancelled.length,
@@ -303,14 +303,12 @@ export function ReportsPanel({ user }: { user: User }) {
 
       <article className="reference-card">
         <div className="card-heading">
-          <h2>Merma y ajustes de la semana</h2>
-          <span>
-            {data.wasteUnits} uds de merma · {money.format(data.wasteCost)}
-          </span>
+          <h2>Movimientos de insumos</h2>
+          <span>Merma de la semana: {money.format(data.wasteCost)}</span>
         </div>
         <div className="report-table">
           <div className="report-head">
-            <span>Producto</span>
+            <span>Insumo</span>
             <span>Tipo</span>
             <span>Cant.</span>
             <span>Motivo</span>
@@ -318,17 +316,24 @@ export function ReportsPanel({ user }: { user: User }) {
           </div>
           {[...data.wasteMovements, ...data.adjustments].map((movement) => (
             <div className="report-row" key={movement.id}>
-              <span>{movement.productName}</span>
-              <span>{movement.type === "WASTE" ? "Merma" : "Ajuste"}</span>
+              <span>{movement.supplyName}</span>
+              <span>
+                {movement.type === "WASTE"
+                  ? "Merma"
+                  : movement.type === "PURCHASE"
+                    ? "Compra"
+                    : "Ajuste"}
+              </span>
               <span className={movement.quantityChange > 0 ? "stock-in" : "stock-out"}>
-                {movement.quantityChange > 0 ? `+${movement.quantityChange}` : movement.quantityChange}
+                {movement.quantityChange > 0 ? `+${movement.quantityChange}` : movement.quantityChange}{" "}
+                {movement.unit}
               </span>
               <span>{movement.reason}</span>
               <span>{movement.userName}</span>
             </div>
           ))}
           {!data.wasteMovements.length && !data.adjustments.length && (
-            <p className="reference-empty">Sin merma ni ajustes esta semana.</p>
+            <p className="reference-empty">Sin movimientos de insumos esta semana.</p>
           )}
         </div>
       </article>

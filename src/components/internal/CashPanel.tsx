@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { deleteCashSession, subscribeCashSessions, subscribeProducts } from "../../api/collections";
+import { deleteCashSession, subscribeCashSessions, subscribeSupplies } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
-import { closeCashSession, openCashSession, registerWaste } from "../../api/transactions";
-import type { CashSession, CashTotals, Product, User } from "../../types";
+import { closeCashSession, openCashSession, registerSupplyWaste } from "../../api/transactions";
+import type { CashSession, CashTotals, Supply, User } from "../../types";
 import { WasteEditor, type WasteLine } from "./WasteEditor";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -16,7 +16,7 @@ interface ClosingReport {
   expectedAmount: number;
   differenceAmount: number;
   totals: CashTotals;
-  waste: Array<{ name: string; quantity: number; reason: string }>;
+  waste: Array<{ name: string; quantity: number; unit: string; reason: string }>;
 }
 
 export function CashPanel({ user }: { user: User }) {
@@ -25,13 +25,13 @@ export function CashPanel({ user }: { user: User }) {
   const [error, setError] = useState("");
   const [report, setReport] = useState<ClosingReport | null>(null);
   const [busy, setBusy] = useState(false);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [supplies, setSupplies] = useState<Supply[]>([]);
   const [waste, setWaste] = useState<WasteLine[]>([]);
 
   useEffect(
     () =>
-      subscribeProducts(
-        setProducts,
+      subscribeSupplies(
+        setSupplies,
         (reason) => setError(errorMessage(reason, "No se pudo cargar el inventario")),
       ),
     [],
@@ -65,7 +65,7 @@ export function CashPanel({ user }: { user: User }) {
         // La merma se aplica ANTES de cerrar: una vez cerrado el turno ya no
         // se puede tocar, y así el inventario final del corte ya la refleja.
         for (const line of waste) {
-          await registerWaste(line.productId, line.quantity, line.reason, {
+          await registerSupplyWaste(line.supplyId, line.quantity, line.reason, {
             uid: user.id,
             name: user.name,
           });
@@ -82,7 +82,8 @@ export function CashPanel({ user }: { user: User }) {
           differenceAmount: result.differenceAmount,
           totals: result.totals,
           waste: waste.map((line) => ({
-            name: products.find((product) => product.id === line.productId)?.name ?? line.productId,
+            name: supplies.find((supply) => supply.id === line.supplyId)?.name ?? line.supplyId,
+            unit: supplies.find((supply) => supply.id === line.supplyId)?.unit ?? '',
             quantity: line.quantity,
             reason: line.reason,
           })),
@@ -156,7 +157,7 @@ export function CashPanel({ user }: { user: User }) {
               required
             />
             {current && (
-              <WasteEditor products={products} lines={waste} onChange={setWaste} />
+              <WasteEditor supplies={supplies} lines={waste} onChange={setWaste} />
             )}
             <button className="primary-button light-button" disabled={busy}>
               {busy

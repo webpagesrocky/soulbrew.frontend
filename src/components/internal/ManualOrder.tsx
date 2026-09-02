@@ -177,9 +177,7 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
                   >
                     <span className="manual-product-name">{product.name}</span>
                     <span className="manual-product-price">{money.format(product.price)}</span>
-                    <span className="manual-product-stock">
-                      {soldOut ? "Agotado" : `${product.stock} uds`}
-                    </span>
+                    {soldOut && <span className="manual-product-stock">Agotado</span>}
                     {quantity > 0 && <span className="manual-product-badge">{quantity}</span>}
                   </button>
                 );

@@ -156,6 +156,9 @@ export interface Supply {
   packLabel: string;
 }
 
+/** PURCHASE: llegó mercancía. WASTE: se tiró o derramó. ADJUSTMENT: corrección de conteo. */
+export type SupplyMovementType = "PURCHASE" | "WASTE" | "ADJUSTMENT";
+
 export interface SupplyMovement {
   id: string;
   supplyId: string;
@@ -165,6 +168,8 @@ export interface SupplyMovement {
   userName: string;
   quantityChange: number;
   reason: string;
+  /** ADJUSTMENT en los movimientos anteriores a que existiera este campo. */
+  type: SupplyMovementType;
   createdAt: Date | null;
 }
 

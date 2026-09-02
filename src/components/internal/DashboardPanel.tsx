@@ -117,7 +117,7 @@ export function DashboardPanel({ onViewOrders }: { onViewOrders: () => void }) {
             <div key={name}>
               <span>{index + 1}</span>
               <strong>{name}</strong>
-              <small>{quantity} uds</small>
+              <small>{quantity} vendidos</small>
             </div>
           ))}
           {!data.best.length && (

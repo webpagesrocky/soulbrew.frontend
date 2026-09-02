@@ -152,11 +152,6 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
           <span>Visible en el menú público</span>
         </label>
 
-        <p className="editor-note">
-          Existencias actuales: {product.stock} uds. El inventario no se edita aquí — se mueve
-          al vender, cancelar o con un ajuste manual.
-        </p>
-
         <div className="editor-actions">
           <button type="button" onClick={onClose} disabled={busy}>
             Cancelar

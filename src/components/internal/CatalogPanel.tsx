@@ -9,7 +9,6 @@ import {
 } from "../../api/collections";
 import { productCost } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
-import { adjustInventory } from "../../api/transactions";
 import type { Category, Product, Supply, User } from "../../types";
 import { CategoryManager } from "./CategoryManager";
 import { ImageField } from "./ImageField";
@@ -126,24 +125,6 @@ export function CatalogPanel({ user }: { user: User }) {
     }
   }
 
-  async function adjust(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    try {
-      await adjustInventory(
-        String(data.get("productId")),
-        Number(data.get("quantityChange")),
-        String(data.get("reason")),
-        { uid: user.id, name: user.name },
-      );
-      form.reset();
-      setMessage("Inventario ajustado y movimiento registrado.");
-    } catch (reason) {
-      setError(errorMessage(reason, "No se pudo ajustar el inventario"));
-    }
-  }
-
   return (
     <section className="reference-panel">
       <div className="reference-heading">
@@ -195,29 +176,6 @@ export function CatalogPanel({ user }: { user: User }) {
             onError={setError}
           />
 
-          {user.role === "ADMIN" && (
-            <form className="reference-card compact-form" onSubmit={adjust}>
-              <h2>Ajustar inventario</h2>
-              <p>Los ajustes manuales quedan registrados.</p>
-              <select name="productId" required>
-                <option value="">Selecciona producto…</option>
-                {products.map((product) => (
-                  <option value={product.id} key={product.id}>
-                    {product.name} · {product.stock} uds
-                  </option>
-                ))}
-              </select>
-              <input
-                name="quantityChange"
-                placeholder="Cantidad: + entrada / − salida"
-                type="number"
-                step="1"
-                required
-              />
-              <input name="reason" placeholder="Motivo del ajuste" required minLength={4} />
-              <button className="reference-primary">Registrar ajuste</button>
-            </form>
-          )}
         </div>
         <article className="reference-card products-card">
           <div className="card-heading">
@@ -294,7 +252,6 @@ export function CatalogPanel({ user }: { user: User }) {
                     >
                       ▣ {product.soldOut ? "Agotado (hoy)" : "Disponible"}
                     </button>
-                    <b>{product.stock} uds</b>
                     <button
                       className="product-edit"
                       onClick={() => setEditing(product)}

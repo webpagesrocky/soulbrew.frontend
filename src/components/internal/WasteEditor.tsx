@@ -1,14 +1,14 @@
 import { useState } from "react";
-import type { Product } from "../../types";
+import type { Supply } from "../../types";
 
 export interface WasteLine {
-  productId: string;
+  supplyId: string;
   quantity: number;
   reason: string;
 }
 
 interface Props {
-  products: Product[];
+  supplies: Supply[];
   lines: WasteLine[];
   onChange: (lines: WasteLine[]) => void;
 }
@@ -16,27 +16,29 @@ interface Props {
 /**
  * Captura de merma del turno: lo que se tiró, derramó o se dio de muestra.
  *
- * Va dentro del cierre de caja porque es el momento en que se cuadra el turno.
- * No duplica el descuento de las ventas —esas ya restaron inventario al
- * cobrarse—; esto registra lo que se perdió sin venderse.
+ * Va sobre insumos, no sobre bebidas: lo que de verdad se pierde es la leche
+ * derramada o el vaso roto. Se captura al cerrar caja, que es el momento en
+ * que se cuadra el turno, y no duplica el descuento de las ventas — ésas ya
+ * bajaron su receta al cobrarse.
  */
-export function WasteEditor({ products, lines, onChange }: Props) {
-  const [productId, setProductId] = useState("");
+export function WasteEditor({ supplies, lines, onChange }: Props) {
+  const [supplyId, setSupplyId] = useState("");
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
 
-  const nameOf = (id: string) => products.find((product) => product.id === id)?.name ?? id;
+  const supplyOf = (id: string) => supplies.find((supply) => supply.id === id);
 
   function add() {
     const amount = Number(quantity);
-    if (!productId || !Number.isFinite(amount) || amount <= 0 || reason.trim().length < 4) return;
-    onChange([...lines, { productId, quantity: amount, reason: reason.trim() }]);
-    setProductId("");
+    if (!supplyId || !Number.isFinite(amount) || amount <= 0 || reason.trim().length < 4) return;
+    onChange([...lines, { supplyId, quantity: amount, reason: reason.trim() }]);
+    setSupplyId("");
     setQuantity("");
     setReason("");
   }
 
-  const canAdd = productId && Number(quantity) > 0 && reason.trim().length >= 4;
+  const canAdd = supplyId && Number(quantity) > 0 && reason.trim().length >= 4;
+  const selected = supplyOf(supplyId);
 
   return (
     <div className="waste-editor">
@@ -44,40 +46,43 @@ export function WasteEditor({ products, lines, onChange }: Props) {
 
       {lines.length > 0 && (
         <div className="waste-list">
-          {lines.map((line, index) => (
-            <div className="waste-row" key={`${line.productId}-${index}`}>
-              <span>
-                <strong>
-                  {line.quantity} × {nameOf(line.productId)}
-                </strong>
-                <small>{line.reason}</small>
-              </span>
-              <button
-                type="button"
-                onClick={() => onChange(lines.filter((_, i) => i !== index))}
-                aria-label="Quitar merma"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+          {lines.map((line, index) => {
+            const supply = supplyOf(line.supplyId);
+            return (
+              <div className="waste-row" key={`${line.supplyId}-${index}`}>
+                <span>
+                  <strong>
+                    {line.quantity} {supply?.unit ?? ""} de {supply?.name ?? line.supplyId}
+                  </strong>
+                  <small>{line.reason}</small>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onChange(lines.filter((_, i) => i !== index))}
+                  aria-label="Quitar merma"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      <select value={productId} onChange={(event) => setProductId(event.target.value)}>
-        <option value="">Producto…</option>
-        {products.map((product) => (
-          <option value={product.id} key={product.id}>
-            {product.name} · {product.stock} uds
+      <select value={supplyId} onChange={(event) => setSupplyId(event.target.value)}>
+        <option value="">Insumo…</option>
+        {supplies.map((supply) => (
+          <option value={supply.id} key={supply.id}>
+            {supply.name} · {supply.stock} {supply.unit}
           </option>
         ))}
       </select>
       <div className="waste-add">
         <input
           type="number"
-          min="1"
-          step="1"
-          placeholder="Cant."
+          min="0.01"
+          step="0.01"
+          placeholder={selected ? `Cant. (${selected.unit})` : "Cant."}
           value={quantity}
           onChange={(event) => setQuantity(event.target.value)}
         />
@@ -91,7 +96,7 @@ export function WasteEditor({ products, lines, onChange }: Props) {
         </button>
       </div>
       <small className="waste-note">
-        Se descuenta del inventario al cerrar el turno y queda registrado en la bitácora.
+        Se descuenta de los insumos al cerrar el turno y queda registrado en la bitácora.
       </small>
     </div>
   );

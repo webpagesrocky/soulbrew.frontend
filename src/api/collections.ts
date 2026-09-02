@@ -292,6 +292,7 @@ function toSupplyMovement(snapshot: Snapshot): SupplyMovement {
     userName: data.userName,
     quantityChange: data.quantityChange,
     reason: data.reason,
+    type: data.type ?? "ADJUSTMENT",
     createdAt: toDate(data.createdAt),
   };
 }
@@ -340,8 +341,56 @@ function withUnitCost(input: SupplyInput) {
   return { ...input, cost: input.packSize > 0 ? input.packCost / input.packSize : 0 };
 }
 
-export async function createSupply(input: SupplyInput) {
-  await addDoc(collection(db, "supplies"), { ...withUnitCost(input), stock: 0, active: true });
+/** Devuelve el id para poder meter el insumo recién creado en varias recetas. */
+export async function createSupply(input: SupplyInput): Promise<string> {
+  const ref = await addDoc(collection(db, "supplies"), {
+    ...withUnitCost(input),
+    stock: 0,
+    active: true,
+  });
+  return ref.id;
+}
+
+/**
+ * Mete un ingrediente en la receta de varios productos de una sentada, que es
+ * como se piensa al dar de alta un insumo: "la leche la llevan estos cinco".
+ *
+ * Si un producto todavía no tiene receta propia, se le siembra la de su
+ * categoría antes de agregar el ingrediente: sin eso, quedaría con una receta
+ * de un solo renglón y perdería en silencio la base que venía heredando.
+ */
+export async function addIngredientToProducts(
+  productIds: string[],
+  ingredient: RecipeItem,
+  products: Product[],
+  categories: Category[],
+) {
+  const batch = writeBatch(db);
+  for (const id of productIds) {
+    const product = products.find((item) => item.id === id);
+    if (!product) continue;
+    const base = product.recipe.length
+      ? product.recipe
+      : (categories.find((category) => category.id === product.category)?.recipe ?? []);
+    // Si ya lo lleva, se respeta la cantidad que ya tenía en vez de duplicarlo.
+    if (base.some((row) => row.supplyId === ingredient.supplyId)) continue;
+    batch.update(doc(db, "products", id), {
+      recipe: [...base, ingredient],
+      updatedAt: serverTimestamp(),
+    });
+  }
+  await batch.commit();
+}
+
+/** Igual que lo anterior pero sobre la receta base de una categoría. */
+export async function addIngredientToCategory(
+  categoryId: string,
+  ingredient: RecipeItem,
+  categories: Category[],
+) {
+  const current = categories.find((category) => category.id === categoryId)?.recipe ?? [];
+  if (current.some((row) => row.supplyId === ingredient.supplyId)) return;
+  await updateDoc(doc(db, "categories", categoryId), { recipe: [...current, ingredient] });
 }
 
 export async function updateSupply(id: string, input: SupplyInput & { stock: number; active: boolean }) {

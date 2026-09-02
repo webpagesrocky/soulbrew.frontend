@@ -260,11 +260,10 @@ export async function payOrder(orderId: string, paymentMethod: PaymentMethod, ac
     const productSnaps = await Promise.all(order.items.map((item) => tx.get(productRef(item.productId))));
     const supplyUsage = await readSupplyUsage(tx, order.items, productSnaps);
 
+    // El stock del producto ya no se toca: lo que el negocio almacena son los
+    // insumos, y una bebida no se almacena, se arma. Además exigirlo impedía
+    // cobrar cualquier producto cuyo contador estuviera en cero.
     tx.update(orderRef, { status: "PAID", paymentMethod, cashSessionId: sessionId, paidAt: serverTimestamp() });
-    order.items.forEach((item, index) => {
-      const stock = productSnaps[index]!.data()!.stock as number;
-      tx.update(productRef(item.productId), { stock: stock - item.quantity });
-    });
     for (const row of supplyUsage) {
       // Nunca baja de cero ni bloquea el cobro: si el conteo de barra quedó
       // desfasado, eso se corrige en inventario, no negándose a cobrar.
@@ -318,11 +317,9 @@ export async function cancelOrder(orderId: string, reason: string, actor: Actor)
       cancelledAt: serverTimestamp(),
       loyaltyReverted: true,
     });
+    // Sólo se devuelven insumos, y sólo si la orden llegó a cobrarse: el stock
+    // del producto ya no se mueve al vender, así que no hay nada que devolver.
     if (wasPaid) {
-      order.items.forEach((item, index) => {
-        const stock = productSnaps[index]!.data()!.stock as number;
-        tx.update(productRef(item.productId), { stock: stock + item.quantity });
-      });
       for (const row of supplyUsage) {
         tx.update(row.ref, { stock: round2(row.stock + row.quantity) });
       }
@@ -429,44 +426,6 @@ export async function closeCashSession(sessionId: string, closingAmount: number)
   });
 }
 
-async function moveStock(
-  productId: string,
-  quantityChange: number,
-  reason: string,
-  type: "WASTE" | "ADJUSTMENT",
-  actor: Actor,
-) {
-  const ref = productRef(productId);
-  const movementRef = doc(collection(db, "inventoryMovements"));
-
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists()) throw new OrderError("Producto no encontrado");
-    const product = snap.data() as { name: string; stock: number };
-    const stock = product.stock + quantityChange;
-    if (stock < 0) {
-      throw new OrderError(
-        type === "WASTE"
-          ? `No hay tanto ${product.name} en existencia para registrar esa merma`
-          : "El ajuste dejaría existencias negativas",
-      );
-    }
-
-    tx.update(ref, { stock });
-    tx.set(movementRef, {
-      productId,
-      productName: product.name,
-      userId: actor.uid,
-      userName: actor.name,
-      quantityChange,
-      reason,
-      type,
-      createdAt: serverTimestamp(),
-    });
-
-    return { productId, previousStock: product.stock, change: quantityChange, stock, reason };
-  });
-}
 
 /**
  * Entrada o salida de un insumo (leche, vasos…).
@@ -474,11 +433,15 @@ async function moveStock(
  * Ajusta la existencia y deja el movimiento en la misma transacción, para que
  * nunca quede un cambio de stock sin explicación en la bitácora.
  */
+/** PURCHASE: llegó mercancía. WASTE: se tiró o derramó. ADJUSTMENT: corrección de conteo. */
+export type SupplyMovementType = "PURCHASE" | "WASTE" | "ADJUSTMENT";
+
 export async function moveSupply(
   supplyId: string,
   quantityChange: number,
   reason: string,
   actor: Actor,
+  type: SupplyMovementType = "ADJUSTMENT",
 ) {
   if (quantityChange === 0) throw new OrderError("La cantidad no puede ser cero");
 
@@ -504,6 +467,7 @@ export async function moveSupply(
       userName: actor.name,
       quantityChange,
       reason,
+      type,
       createdAt: serverTimestamp(),
     });
 
@@ -511,29 +475,19 @@ export async function moveSupply(
   });
 }
 
-/** Corrección manual de existencias. Sólo administración. */
-export async function adjustInventory(
-  productId: string,
-  quantityChange: number,
-  reason: string,
-  actor: Actor,
-) {
-  return moveStock(productId, quantityChange, reason, "ADJUSTMENT", actor);
-}
-
 /**
- * Merma del turno: lo que se tiró, se derramó o se dio de muestra.
+ * Merma de barra: lo que se tiró, se derramó o se dio de muestra.
  *
- * Se registra al cerrar caja y descuenta inventario. No duplica el descuento
- * de las ventas: aquéllas ya se restaron al cobrarse, esto es lo que se perdió
- * sin venderse.
+ * Se captura al cerrar el turno y descuenta insumos, no productos: lo que de
+ * verdad se pierde es la leche derramada o el vaso roto. No duplica el
+ * descuento de las ventas, que ya bajaron su receta al cobrarse.
  */
-export async function registerWaste(
-  productId: string,
+export async function registerSupplyWaste(
+  supplyId: string,
   quantity: number,
   reason: string,
   actor: Actor,
 ) {
   if (quantity <= 0) throw new OrderError("La merma debe ser mayor a cero");
-  return moveStock(productId, -Math.abs(quantity), reason, "WASTE", actor);
+  return moveSupply(supplyId, -Math.abs(quantity), reason, actor, "WASTE");
 }

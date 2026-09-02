@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  addIngredientToCategory,
+  addIngredientToProducts,
   createSupply,
   deleteSupply,
+  subscribeCategories,
+  subscribeProducts,
   subscribeSupplies,
   subscribeSupplyMovements,
   updateSupply,
@@ -9,7 +13,7 @@ import {
 import { unitCost } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
 import { moveSupply } from "../../api/transactions";
-import type { Supply, SupplyMovement, User } from "../../types";
+import type { Category, Product, Supply, SupplyMovement, User } from "../../types";
 import { Icon } from "../Icon";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -45,7 +49,43 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<Supply | null>(null);
 
+  // Alta de insumo: a qué productos se le mete de una vez.
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [linkCategory, setLinkCategory] = useState("");
+  const [linkAll, setLinkAll] = useState(false);
+  const [linkIds, setLinkIds] = useState<string[]>([]);
+  const [linkQty, setLinkQty] = useState("");
+
   const canManage = user.role === "ADMIN" || user.role === "SUPERVISOR";
+
+  useEffect(
+    () =>
+      subscribeProducts(setProducts, (reason) =>
+        onError(errorMessage(reason, "No se pudo cargar el catálogo")),
+      ),
+    [onError],
+  );
+
+  useEffect(
+    () =>
+      subscribeCategories(
+        (list) => setCategories(list.filter((item) => item.active)),
+        (reason) => onError(errorMessage(reason, "No se pudieron cargar las categorías")),
+      ),
+    [onError],
+  );
+
+  const linkableProducts = products.filter(
+    (product) => product.category === linkCategory && product.active,
+  );
+
+  function resetLink() {
+    setLinkCategory("");
+    setLinkAll(false);
+    setLinkIds([]);
+    setLinkQty("");
+  }
 
   useEffect(
     () =>
@@ -79,16 +119,37 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
     const data = new FormData(form);
     setBusy(true);
     try {
-      await createSupply({
-        name: String(data.get("name")).trim(),
-        unit: String(data.get("unit")),
+      const name = String(data.get("name")).trim();
+      const unit = String(data.get("unit"));
+      const supplyId = await createSupply({
+        name,
+        unit,
         minStock: Number(data.get("minStock") ?? 0) || 0,
         packLabel: String(data.get("packLabel") ?? "paquete"),
         packSize: Number(data.get("packSize") ?? 0) || 0,
         packCost: Number(data.get("packCost") ?? 0) || 0,
       });
+
+      // Segundo paso opcional: meterlo de una vez en las recetas que lo usan.
+      const quantity = Number(linkQty);
+      let linkNote = "";
+      if (linkCategory && quantity > 0) {
+        const ingredient = { supplyId, supplyName: name, unit, quantity };
+        if (linkAll) {
+          await addIngredientToCategory(linkCategory, ingredient, categories);
+          const category = categories.find((item) => item.id === linkCategory);
+          linkNote = ` Se agregó a la receta de ${category?.name ?? linkCategory}, así que lo llevan todos sus productos.`;
+        } else if (linkIds.length) {
+          await addIngredientToProducts(linkIds, ingredient, products, categories);
+          linkNote = ` Se agregó a ${linkIds.length} ${linkIds.length === 1 ? "producto" : "productos"}.`;
+        }
+      }
+
       form.reset();
-      onMessage("Insumo agregado. Registra una entrada para darle existencias.");
+      resetLink();
+      onMessage(
+        `"${name}" agregado. Registra una entrada para darle existencias.${linkNote}`,
+      );
     } catch (reason) {
       onError(errorMessage(reason, "No se pudo agregar el insumo"));
     } finally {
@@ -118,6 +179,9 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
         direction === "OUT" ? -amount : amount,
         String(data.get("reason")),
         { uid: user.id, name: user.name },
+        // Una entrada es mercancía que llegó; la salida manual es corrección
+        // de conteo (la merma tiene su propia captura al cerrar el turno).
+        direction === "OUT" ? "ADJUSTMENT" : "PURCHASE",
       );
       form.reset();
       onMessage(
@@ -316,6 +380,78 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                 step="0.01"
                 placeholder="Avisar cuando baje de… (opcional)"
               />
+
+              <label>¿Qué lo lleva? (opcional)</label>
+              <select
+                value={linkCategory}
+                onChange={(event) => {
+                  setLinkCategory(event.target.value);
+                  setLinkIds([]);
+                  setLinkAll(false);
+                }}
+              >
+                <option value="">No asociarlo por ahora</option>
+                {categories.map((category) => (
+                  <option value={category.id} key={category.id}>
+                    {category.emoji} {category.name}
+                  </option>
+                ))}
+              </select>
+
+              {linkCategory && (
+                <>
+                  <label className="editor-check">
+                    <input
+                      type="checkbox"
+                      checked={linkAll}
+                      onChange={(event) => {
+                        setLinkAll(event.target.checked);
+                        if (event.target.checked) setLinkIds([]);
+                      }}
+                    />
+                    <span>Lo lleva toda la categoría</span>
+                  </label>
+
+                  {!linkAll && (
+                    <div className="link-products">
+                      {linkableProducts.map((product) => (
+                        <label className="link-product" key={product.id}>
+                          <input
+                            type="checkbox"
+                            checked={linkIds.includes(product.id)}
+                            onChange={(event) =>
+                              setLinkIds((current) =>
+                                event.target.checked
+                                  ? [...current, product.id]
+                                  : current.filter((id) => id !== product.id),
+                              )
+                            }
+                          />
+                          <span>{product.name}</span>
+                        </label>
+                      ))}
+                      {!linkableProducts.length && (
+                        <p className="reference-empty">Esa categoría no tiene productos activos.</p>
+                      )}
+                    </div>
+                  )}
+
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={linkQty}
+                    onChange={(event) => setLinkQty(event.target.value)}
+                    placeholder="¿Cuánto lleva cada uno? (250)"
+                  />
+                  <small className="editor-note">
+                    {linkAll
+                      ? "Se agrega a la receta de la categoría, así que lo heredan todos sus productos."
+                      : "Se agrega solo a los productos marcados. Al que aún no tenga receta propia se le copia primero la de su categoría, para que no pierda lo que ya heredaba."}
+                  </small>
+                </>
+              )}
+
               <button className="reference-primary" disabled={busy}>
                 + Agregar insumo
               </button>
