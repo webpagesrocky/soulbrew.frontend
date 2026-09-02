@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   startOfDay,
+  subscribeCategories,
   subscribeInventoryMovements,
   subscribeOrdersBetween,
   subscribeProducts,
+  subscribeSupplies,
 } from "../../api/collections";
+import { costTable } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
-import { adjustInventory } from "../../api/transactions";
-import type { InventoryMovement, Order, Product, User } from "../../types";
+import type { Category, InventoryMovement, Order, Product, Supply, User } from "../../types";
 import { Icon } from "../Icon";
 import { SuppliesSection } from "./SuppliesSection";
 import { SupplyForecast } from "./SupplyForecast";
@@ -37,14 +39,15 @@ function addDays(date: Date, days: number): Date {
  */
 export function ReportsPanel({ user }: { user: User }) {
   const [view, setView] = useState<"sales" | "inventory">("sales");
-  const [inventoryTab, setInventoryTab] = useState<"forecast" | "supplies" | "menu">("forecast");
+  const [inventoryTab, setInventoryTab] = useState<"forecast" | "supplies">("forecast");
   const [weekOffset, setWeekOffset] = useState(0);
   const [orders, setOrders] = useState<Order[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [supplies, setSupplies] = useState<Supply[]>([]);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
 
   const range = useMemo(() => {
     const from = addDays(startOfWeek(new Date()), weekOffset * 7);
@@ -81,9 +84,29 @@ export function ReportsPanel({ user }: { user: User }) {
     [],
   );
 
+  useEffect(
+    () =>
+      subscribeCategories(
+        setCategories,
+        (reason) => setError(errorMessage(reason, "No se pudieron cargar las categorías")),
+      ),
+    [],
+  );
+
+  useEffect(
+    () =>
+      subscribeSupplies(
+        setSupplies,
+        (reason) => setError(errorMessage(reason, "No se pudieron cargar los insumos")),
+      ),
+    [],
+  );
+
   const data = useMemo(() => {
     const paid = orders.filter((order) => order.status === "PAID");
-    const costOf = new Map(products.map((product) => [product.id, product.cost ?? 0]));
+    // El costo sale de la receta y del precio real de los insumos; el capturado
+    // a mano sólo se usa mientras el producto no tenga receta.
+    const costOf = costTable(products, categories, supplies);
 
     let revenue = 0;
     let cost = 0;
@@ -146,7 +169,7 @@ export function ReportsPanel({ user }: { user: User }) {
       cancelledCount: cancelled.length,
       missingCost: [...byProduct.entries()].filter(([id]) => !costOf.get(id)).length,
     };
-  }, [orders, movements, products]);
+  }, [orders, movements, products, categories, supplies]);
 
   const label =
     weekOffset === 0
@@ -163,34 +186,6 @@ export function ReportsPanel({ user }: { user: User }) {
     { label: "Ganancia neta", value: money.format(data.netProfit), icon: "check" as const, tone: "brown" },
   ];
 
-  /** Entrada de mercancía: suma existencias y deja constancia de quién y por qué. */
-  async function addStock(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    setBusy(true);
-    setError("");
-    try {
-      await adjustInventory(
-        String(formData.get("productId")),
-        Math.abs(Number(formData.get("quantity"))),
-        String(formData.get("reason")),
-        { uid: user.id, name: user.name },
-      );
-      form.reset();
-      setMessage("Entrada registrada y sumada al inventario.");
-    } catch (reason) {
-      setError(errorMessage(reason, "No se pudo registrar la entrada"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const stockValue = products.reduce(
-    (sum, product) => sum + product.stock * (product.cost ?? 0),
-    0,
-  );
-
   return (
     <section className="reference-panel">
       <div className="panel-heading reference-heading-row">
@@ -199,7 +194,7 @@ export function ReportsPanel({ user }: { user: User }) {
           <p>
             {view === "sales"
               ? `${range.from.toLocaleDateString("es-MX")} – ${addDays(range.to, -1).toLocaleDateString("es-MX")}`
-              : "Existencias actuales, entradas y movimientos."}
+              : "Lo que el negocio compra y almacena: insumos de barra."}
           </p>
         </div>
         <div className="segmented">
@@ -236,8 +231,8 @@ export function ReportsPanel({ user }: { user: User }) {
       {data.missingCost > 0 && (
         <div className="notice error">
           {data.missingCost} {data.missingCost === 1 ? "producto vendido no tiene" : "productos vendidos no tienen"}{" "}
-          costo capturado, así que su ganancia se está contando completa. Ponles costo en Menú → Editar
-          para que el reporte sea exacto.
+          costo, así que su ganancia se está contando completa. Ponles receta en Menú (botón
+          "Receta" del producto o de su categoría) para que el costo salga solo de los insumos.
         </div>
       )}
 
@@ -306,6 +301,38 @@ export function ReportsPanel({ user }: { user: User }) {
         </div>
       </div>
 
+      <article className="reference-card">
+        <div className="card-heading">
+          <h2>Merma y ajustes de la semana</h2>
+          <span>
+            {data.wasteUnits} uds de merma · {money.format(data.wasteCost)}
+          </span>
+        </div>
+        <div className="report-table">
+          <div className="report-head">
+            <span>Producto</span>
+            <span>Tipo</span>
+            <span>Cant.</span>
+            <span>Motivo</span>
+            <span>Quién</span>
+          </div>
+          {[...data.wasteMovements, ...data.adjustments].map((movement) => (
+            <div className="report-row" key={movement.id}>
+              <span>{movement.productName}</span>
+              <span>{movement.type === "WASTE" ? "Merma" : "Ajuste"}</span>
+              <span className={movement.quantityChange > 0 ? "stock-in" : "stock-out"}>
+                {movement.quantityChange > 0 ? `+${movement.quantityChange}` : movement.quantityChange}
+              </span>
+              <span>{movement.reason}</span>
+              <span>{movement.userName}</span>
+            </div>
+          ))}
+          {!data.wasteMovements.length && !data.adjustments.length && (
+            <p className="reference-empty">Sin merma ni ajustes esta semana.</p>
+          )}
+        </div>
+      </article>
+
       <div className="report-print">
         <button className="reference-primary" onClick={() => window.print()}>
           Imprimir reporte
@@ -329,12 +356,6 @@ export function ReportsPanel({ user }: { user: User }) {
             >
               Insumos
             </button>
-            <button
-              className={inventoryTab === "menu" ? "active" : ""}
-              onClick={() => setInventoryTab("menu")}
-            >
-              Productos del menú
-            </button>
           </div>
 
           {inventoryTab === "forecast" && <SupplyForecast onError={setError} />}
@@ -351,138 +372,6 @@ export function ReportsPanel({ user }: { user: User }) {
             />
           )}
 
-          {inventoryTab === "menu" && (
-            <>
-          <div className="metric-grid inventory-metrics">
-            <article className="metric-card">
-              <div className="metric-icon brown"><Icon name="coffee" size={22} /></div>
-              <div>
-                <span>Productos</span>
-                <strong>{products.length}</strong>
-              </div>
-            </article>
-            <article className="metric-card">
-              <div className="metric-icon green"><Icon name="check" size={22} /></div>
-              <div>
-                <span>Unidades en existencia</span>
-                <strong>{products.reduce((sum, product) => sum + product.stock, 0)}</strong>
-              </div>
-            </article>
-            <article className="metric-card">
-              <div className="metric-icon brown"><Icon name="sales" size={22} /></div>
-              <div>
-                <span>Valor del inventario</span>
-                <strong>{money.format(stockValue)}</strong>
-              </div>
-            </article>
-            <article className="metric-card">
-              <div className="metric-icon amber"><Icon name="clock" size={22} /></div>
-              <div>
-                <span>Merma de la semana</span>
-                <strong>{data.wasteUnits} uds</strong>
-              </div>
-            </article>
-          </div>
-
-          <div className="inventory-grid">
-            <article className="reference-card">
-              <div className="card-heading">
-                <h2>Existencias</h2>
-                <span>{products.length} productos</span>
-              </div>
-              <div className="report-table">
-                <div className="report-head stock-head">
-                  <span>Producto</span>
-                  <span>Stock</span>
-                  <span>Costo</span>
-                  <span>Valor</span>
-                </div>
-                {products.map((product) => (
-                  <div className="report-row stock-head" key={product.id}>
-                    <span>{product.name}</span>
-                    <strong className={product.stock === 0 ? "stock-zero" : ""}>
-                      {product.stock}
-                    </strong>
-                    <span>{product.cost ? money.format(product.cost) : "—"}</span>
-                    <span>{money.format(product.stock * (product.cost ?? 0))}</span>
-                  </div>
-                ))}
-                {!products.length && <p className="reference-empty">No hay productos.</p>}
-              </div>
-            </article>
-
-            {user.role === "ADMIN" && (
-              <form className="reference-card compact-form" onSubmit={addStock}>
-                <h2>Registrar entrada</h2>
-                <p>Suma existencias cuando llega mercancía o se prepara un lote.</p>
-                <select name="productId" required defaultValue="">
-                  <option value="" disabled>
-                    Selecciona producto…
-                  </option>
-                  {products.map((product) => (
-                    <option value={product.id} key={product.id}>
-                      {product.name} · {product.stock} uds
-                    </option>
-                  ))}
-                </select>
-                <input
-                  name="quantity"
-                  type="number"
-                  min="1"
-                  step="1"
-                  placeholder="Cantidad que entra"
-                  required
-                />
-                <input
-                  name="reason"
-                  placeholder="Motivo (compra, lote preparado…)"
-                  required
-                  minLength={4}
-                />
-                <button className="reference-primary" disabled={busy}>
-                  {busy ? "Registrando…" : "+ Sumar al inventario"}
-                </button>
-                <small className="editor-note">
-                  Queda registrado en la bitácora con tu nombre. Para restar existencias por
-                  error de conteo, usa Menú → Ajustar inventario.
-                </small>
-              </form>
-            )}
-          </div>
-
-          <article className="reference-card">
-            <div className="card-heading">
-              <h2>Movimientos de la semana</h2>
-              <span>
-                {data.wasteUnits} uds de merma · {money.format(data.wasteCost)}
-              </span>
-            </div>
-            <div className="report-table">
-              <div className="report-head">
-                <span>Producto</span>
-                <span>Tipo</span>
-                <span>Cant.</span>
-                <span>Motivo</span>
-                <span>Quién</span>
-              </div>
-              {[...data.wasteMovements, ...data.adjustments].map((movement) => (
-                <div className="report-row" key={movement.id}>
-                  <span>{movement.productName}</span>
-                  <span>{movement.type === "WASTE" ? "Merma" : "Ajuste"}</span>
-                  <span className={movement.quantityChange > 0 ? "stock-in" : "stock-out"}>
-                    {movement.quantityChange > 0 ? `+${movement.quantityChange}` : movement.quantityChange}
-                  </span>
-                  <span>{movement.reason}</span>
-                  <span>{movement.userName}</span>
-                </div>
-              ))}
-              {!data.wasteMovements.length && !data.adjustments.length && (
-                <p className="reference-empty">Sin movimientos de inventario esta semana.</p>
-              )}
-            </div>
-          </article>
-            </>
-          )}
         </>
       )}
     </section>

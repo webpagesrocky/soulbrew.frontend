@@ -58,6 +58,7 @@ function toProduct(snapshot: Snapshot): Product {
     imageUrl: data.imageUrl ?? null,
     price: data.price,
     cost: data.cost ?? 0,
+    recipe: data.recipe ?? [],
     stock: data.stock,
     active: Boolean(data.active),
     soldOut: Boolean(data.soldOut),
@@ -274,6 +275,9 @@ function toSupply(snapshot: Snapshot): Supply {
     cost: data.cost ?? 0,
     minStock: data.minStock ?? 0,
     active: Boolean(data.active),
+    packSize: data.packSize ?? 0,
+    packCost: data.packCost ?? 0,
+    packLabel: data.packLabel ?? "paquete",
   };
 }
 
@@ -320,16 +324,28 @@ export function subscribeSupplyMovements(
 export interface SupplyInput {
   name: string;
   unit: string;
-  cost: number;
   minStock: number;
+  /** Presentación de compra: tamaño y precio del paquete. */
+  packSize: number;
+  packCost: number;
+  packLabel: string;
+}
+
+/**
+ * El costo por unidad de uso no se captura: sale de la presentación. Así
+ * cuando sube el precio del paquete basta corregir ese número y todas las
+ * recetas que usan el insumo quedan recosteadas solas.
+ */
+function withUnitCost(input: SupplyInput) {
+  return { ...input, cost: input.packSize > 0 ? input.packCost / input.packSize : 0 };
 }
 
 export async function createSupply(input: SupplyInput) {
-  await addDoc(collection(db, "supplies"), { ...input, stock: 0, active: true });
+  await addDoc(collection(db, "supplies"), { ...withUnitCost(input), stock: 0, active: true });
 }
 
 export async function updateSupply(id: string, input: SupplyInput & { stock: number; active: boolean }) {
-  await setDoc(doc(db, "supplies", id), input);
+  await setDoc(doc(db, "supplies", id), withUnitCost(input));
 }
 
 /**
@@ -399,6 +415,14 @@ export async function setCategoryRecipe(id: string, recipe: RecipeItem[]) {
 }
 
 /**
+ * Receta propia de un producto, que gana sobre la de su categoría. Vacía
+ * significa "vuelve a usar la de mi categoría".
+ */
+export async function setProductRecipe(id: string, recipe: RecipeItem[]) {
+  await updateDoc(doc(db, "products", id), { recipe, updatedAt: serverTimestamp() });
+}
+
+/**
  * El id se deriva del nombre porque es lo que queda guardado en cada producto:
  * un id legible hace que los datos se puedan leer sin cruzar colecciones.
  */
@@ -448,6 +472,8 @@ export async function createProduct(input: ProductInput) {
     stock: 0,
     active: true,
     soldOut: false,
+    // La receta propia se captura después; mientras, hereda la de su categoría.
+    recipe: [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   createProduct,
+  setProductRecipe,
   setProductSoldOut,
   subscribeCategories,
   subscribeProducts,
+  subscribeSupplies,
 } from "../../api/collections";
+import { productCost } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
 import { adjustInventory } from "../../api/transactions";
-import type { Category, Product, User } from "../../types";
+import type { Category, Product, Supply, User } from "../../types";
 import { CategoryManager } from "./CategoryManager";
 import { ImageField } from "./ImageField";
 import { ProductEditor } from "./ProductEditor";
+import { RecipeEditor } from "./RecipeEditor";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
@@ -22,6 +26,16 @@ export function CatalogPanel({ user }: { user: User }) {
   const [filter, setFilter] = useState<"ALL" | "AVAILABLE" | "SOLD_OUT">("ALL");
   const [image, setImage] = useState<string | null>(null);
   const [editing, setEditing] = useState<Product | null>(null);
+  const [supplies, setSupplies] = useState<Supply[]>([]);
+  const [recipeOf, setRecipeOf] = useState<Product | null>(null);
+
+  useEffect(
+    () =>
+      subscribeSupplies(setSupplies, (reason) =>
+        setError(errorMessage(reason, "No se pudieron cargar los insumos")),
+      ),
+    [],
+  );
 
   useEffect(
     () =>
@@ -236,7 +250,9 @@ export function CatalogPanel({ user }: { user: User }) {
                     {group.items.length} {group.items.length === 1 ? "producto" : "productos"}
                   </small>
                 </h3>
-                {group.items.map((product) => (
+                {group.items.map((product) => {
+                  const cost = productCost(product, categories, supplies);
+                  return (
                   <div className="reference-product" key={product.id}>
                     <div className="product-thumbnail">
                       {product.imageUrl ? (
@@ -248,10 +264,28 @@ export function CatalogPanel({ user }: { user: User }) {
                     <div>
                       <strong>{product.name}</strong>
                       <small>
-                        {product.description || "Producto Soul Brew"} ·{" "}
-                        {money.format(product.price)}
+                        {money.format(product.price)} · cuesta{" "}
+                        {cost.source === "NONE" ? "—" : money.format(cost.value)}
+                        {cost.source === "MANUAL" && " (a mano)"}
+                        {cost.source !== "NONE" && cost.source !== "MANUAL" && (
+                          <> · gana {money.format(product.price - cost.value)}</>
+                        )}
                       </small>
                     </div>
+                    <button
+                      type="button"
+                      className={`avail-toggle ${product.recipe.length ? "available" : "unavailable manual"}`}
+                      onClick={() => setRecipeOf(product)}
+                      title={
+                        product.recipe.length
+                          ? "Tiene receta propia"
+                          : cost.source === "CATEGORY_RECIPE"
+                            ? "Usa la receta de su categoría"
+                            : "Sin receta"
+                      }
+                    >
+                      ▤ {product.recipe.length ? "Receta propia" : "Receta"}
+                    </button>
                     <button
                       type="button"
                       className={`avail-toggle ${product.soldOut ? "unavailable manual" : "available"}`}
@@ -269,7 +303,8 @@ export function CatalogPanel({ user }: { user: User }) {
                       Editar
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </section>
             ))}
             {!visibleProducts.length && (
@@ -288,6 +323,34 @@ export function CatalogPanel({ user }: { user: User }) {
             setMessage(text);
             setError("");
           }}
+          onError={setError}
+        />
+      )}
+
+      {recipeOf && (
+        <RecipeEditor
+          title={`Receta · ${recipeOf.name}`}
+          hint={
+            <>
+              Lo que consume <strong>una unidad</strong> de este producto en particular. Si lo dejas
+              vacío, usa la receta de su categoría.
+            </>
+          }
+          recipe={recipeOf.recipe}
+          fallback={{
+            label: `la categoría ${categories.find((c) => c.id === recipeOf.category)?.name ?? recipeOf.category}`,
+            recipe: categories.find((c) => c.id === recipeOf.category)?.recipe ?? [],
+          }}
+          onSave={async (recipe) => {
+            await setProductRecipe(recipeOf.id, recipe);
+            setMessage(
+              recipe.length
+                ? `Receta propia de "${recipeOf.name}" guardada.`
+                : `"${recipeOf.name}" vuelve a usar la receta de su categoría.`,
+            );
+            setError("");
+          }}
+          onClose={() => setRecipeOf(null)}
           onError={setError}
         />
       )}

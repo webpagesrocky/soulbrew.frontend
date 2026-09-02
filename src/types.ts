@@ -48,8 +48,17 @@ export interface Product {
   /** data URI comprimido o URL externa; null si no tiene foto. */
   imageUrl: string | null;
   price: number;
-  /** Costo de preparación. 0 en productos dados de alta antes de este campo. */
+  /**
+   * Costo capturado a mano. Sólo se usa mientras el producto no tenga receta
+   * (propia ni de su categoría): en cuanto la tiene, el costo real se calcula
+   * de los insumos. Ver `productCost` en api/costing.ts.
+   */
   cost: number;
+  /**
+   * Receta propia, para el producto que lleva algo distinto al resto de su
+   * categoría (el Banana matcha y su plátano). Vacía = usa la de la categoría.
+   */
+  recipe: RecipeItem[];
   stock: number;
   active: boolean;
   /**
@@ -124,14 +133,27 @@ export interface CashSession {
 export interface Supply {
   id: string;
   name: string;
-  /** Unidad de medida: L, kg, pz, cajas… */
+  /** Unidad en la que se *usa* y se lleva la existencia: ml, g, pz… */
   unit: string;
   stock: number;
-  /** Costo por unidad. */
+  /**
+   * Costo de UNA unidad de uso (un ml, un gramo). No se captura a mano: sale
+   * de dividir `packCost` entre `packSize`, para no obligar a nadie a sacar
+   * esa división cada vez que cambia el precio del paquete.
+   */
   cost: number;
-  /** Umbral para avisar que está por acabarse. */
+  /** Umbral para avisar que está por acabarse, en unidades de uso. */
   minStock: number;
   active: boolean;
+  /**
+   * Presentación en que se compra: "paquete de 600 ml a $28".
+   * `packSize` en unidades de uso; 0 en los insumos dados de alta antes de
+   * existir esto, que siguen usando su `cost` capturado a mano.
+   */
+  packSize: number;
+  packCost: number;
+  /** Cómo se le llama a la presentación: paquete, caja, bolsa, galón… */
+  packLabel: string;
 }
 
 export interface SupplyMovement {

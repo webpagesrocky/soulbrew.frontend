@@ -68,17 +68,19 @@ async function readSupplyUsage(
   items: OrderItem[],
   productSnaps: Array<DocumentSnapshot<DocumentData>>,
 ) {
+  // Sólo se consultan las categorías de los productos que no traen receta
+  // propia: la del producto gana, así que la de su categoría ni se lee.
   const categoryIds = [
     ...new Set(
       productSnaps
+        .filter((snap) => !((snap.data()?.recipe ?? []) as RecipeItem[]).length)
         .map((snap) => snap.data()?.category as string | undefined)
         .filter((id): id is string => Boolean(id)),
     ),
   ];
-  if (!categoryIds.length) return [];
 
   const categorySnaps = await Promise.all(categoryIds.map((id) => tx.get(doc(db, "categories", id))));
-  const recipeOf = new Map<string, RecipeItem[]>(
+  const recipeOfCategory = new Map<string, RecipeItem[]>(
     categoryIds.map((id, index) => [id, (categorySnaps[index]!.data()?.recipe ?? []) as RecipeItem[]]),
   );
 
@@ -87,8 +89,10 @@ async function readSupplyUsage(
   // solo documento, porque Firestore rechaza dos escrituras al mismo doc.
   const needed = new Map<string, number>();
   items.forEach((item, index) => {
-    const category = productSnaps[index]?.data()?.category as string | undefined;
-    for (const ingredient of recipeOf.get(category ?? "") ?? []) {
+    const data = productSnaps[index]?.data();
+    const own = (data?.recipe ?? []) as RecipeItem[];
+    const recipe = own.length ? own : (recipeOfCategory.get(data?.category ?? "") ?? []);
+    for (const ingredient of recipe) {
       const total = (needed.get(ingredient.supplyId) ?? 0) + ingredient.quantity * item.quantity;
       needed.set(ingredient.supplyId, total);
     }

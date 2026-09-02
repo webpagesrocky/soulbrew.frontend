@@ -6,14 +6,24 @@ import {
   subscribeSupplyMovements,
   updateSupply,
 } from "../../api/collections";
+import { unitCost } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
 import { moveSupply } from "../../api/transactions";
 import type { Supply, SupplyMovement, User } from "../../types";
 import { Icon } from "../Icon";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+/** Costo por unidad de uso: son centavos partidos, necesita más decimales. */
+const unitMoney = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 4,
+});
 
-const UNITS = ["pz", "L", "ml", "kg", "g", "cajas", "bolsas"];
+/** Unidades en las que se *usa* el insumo, que es como se lleva la existencia. */
+const UNITS = ["ml", "g", "pz", "L", "kg"];
+
+const PACK_LABELS = ["paquete", "caja", "bolsa", "galón", "bote", "pieza"];
 
 interface Props {
   user: User;
@@ -57,7 +67,7 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
 
   const totals = useMemo(
     () => ({
-      value: supplies.reduce((sum, item) => sum + item.stock * item.cost, 0),
+      value: supplies.reduce((sum, item) => sum + item.stock * unitCost(item), 0),
       low: supplies.filter((item) => item.minStock > 0 && item.stock <= item.minStock),
     }),
     [supplies],
@@ -72,8 +82,10 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
       await createSupply({
         name: String(data.get("name")).trim(),
         unit: String(data.get("unit")),
-        cost: Number(data.get("cost") ?? 0) || 0,
         minStock: Number(data.get("minStock") ?? 0) || 0,
+        packLabel: String(data.get("packLabel") ?? "paquete"),
+        packSize: Number(data.get("packSize") ?? 0) || 0,
+        packCost: Number(data.get("packCost") ?? 0) || 0,
       });
       form.reset();
       onMessage("Insumo agregado. Registra una entrada para darle existencias.");
@@ -88,18 +100,29 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    const amount = Number(data.get("quantity"));
+    const supplyId = String(data.get("supplyId"));
+    const supply = supplies.find((item) => item.id === supplyId);
     const direction = String(data.get("direction"));
+    let amount = Math.abs(Number(data.get("quantity")));
+
+    // Se compra por paquete pero se lleva la existencia en unidades de uso:
+    // "5 paquetes" de leche de 600 ml entran como 3000 ml.
+    if (String(data.get("mode")) === "PACK" && supply && supply.packSize > 0) {
+      amount = amount * supply.packSize;
+    }
+
     setBusy(true);
     try {
       await moveSupply(
-        String(data.get("supplyId")),
-        direction === "OUT" ? -Math.abs(amount) : Math.abs(amount),
+        supplyId,
+        direction === "OUT" ? -amount : amount,
         String(data.get("reason")),
         { uid: user.id, name: user.name },
       );
       form.reset();
-      onMessage(direction === "OUT" ? "Salida registrada." : "Entrada registrada.");
+      onMessage(
+        `${direction === "OUT" ? "Salida" : "Entrada"} registrada: ${amount} ${supply?.unit ?? ""}.`,
+      );
     } catch (reason) {
       onError(errorMessage(reason, "No se pudo registrar el movimiento"));
     } finally {
@@ -116,8 +139,10 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
       await updateSupply(editing.id, {
         name: String(data.get("name")).trim(),
         unit: String(data.get("unit")),
-        cost: Number(data.get("cost") ?? 0) || 0,
         minStock: Number(data.get("minStock") ?? 0) || 0,
+        packLabel: String(data.get("packLabel") ?? "paquete"),
+        packSize: Number(data.get("packSize") ?? 0) || 0,
+        packCost: Number(data.get("packCost") ?? 0) || 0,
         // La existencia no se edita aquí: se mueve con entradas y salidas para
         // que siempre quede el motivo registrado.
         stock: editing.stock,
@@ -206,7 +231,7 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
             <div className="report-head supply-head">
               <span>Insumo</span>
               <span>Existencia</span>
-              <span>Costo</span>
+              <span>Costo unitario</span>
               <span>Valor</span>
               <span />
             </div>
@@ -214,6 +239,12 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
               <div className="report-row supply-head" key={supply.id}>
                 <span>
                   {supply.name}
+                  {supply.packSize > 0 && (
+                    <small className="supply-pack-note">
+                      {" "}· {supply.packLabel} de {supply.packSize} {supply.unit} a{" "}
+                      {money.format(supply.packCost)}
+                    </small>
+                  )}
                   {!supply.active && <small className="supply-off"> · inactivo</small>}
                 </span>
                 <strong
@@ -223,8 +254,10 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                 >
                   {supply.stock} {supply.unit}
                 </strong>
-                <span>{supply.cost ? money.format(supply.cost) : "—"}</span>
-                <span>{money.format(supply.stock * supply.cost)}</span>
+                <span>
+                  {unitCost(supply) ? `${unitMoney.format(unitCost(supply))} / ${supply.unit}` : "—"}
+                </span>
+                <span>{money.format(supply.stock * unitCost(supply))}</span>
                 {canManage ? (
                   <button className="product-edit" onClick={() => setEditing(supply)}>
                     Editar
@@ -248,16 +281,34 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
               <h2>Nuevo insumo</h2>
               <p>Leche, vasos, jarabes… lo que se consume en barra.</p>
               <input name="name" placeholder="Nombre del insumo" required minLength={2} maxLength={80} />
-              <div className="supply-inline">
-                <select name="unit" defaultValue="pz" required>
-                  {UNITS.map((unit) => (
-                    <option value={unit} key={unit}>
-                      {unit}
+
+              <label>Se usa y se mide en</label>
+              <select name="unit" defaultValue="ml" required>
+                {UNITS.map((unit) => (
+                  <option value={unit} key={unit}>
+                    {unit}
+                  </option>
+                ))}
+              </select>
+
+              <label>Cómo lo compras</label>
+              <div className="supply-pack">
+                <select name="packLabel" defaultValue="paquete">
+                  {PACK_LABELS.map((label) => (
+                    <option value={label} key={label}>
+                      {label}
                     </option>
                   ))}
                 </select>
-                <input name="cost" type="number" min="0" step="0.01" placeholder="Costo por unidad" />
+                <input name="packSize" type="number" min="0" step="0.01" placeholder="de… (600)" required />
+                <input name="packCost" type="number" min="0" step="0.01" placeholder="cuesta $" required />
               </div>
+              <small className="editor-note">
+                Ejemplo: leche que se usa en <strong>ml</strong>, viene en <strong>paquete</strong> de{" "}
+                <strong>600</strong> y cuesta <strong>$28</strong>. De ahí sale solo cuánto vale cada
+                ml, y con eso se costean las recetas.
+              </small>
+
               <input
                 name="minStock"
                 type="number"
@@ -298,6 +349,10 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                 required
               />
             </div>
+            <select name="mode" defaultValue="PACK">
+              <option value="PACK">Paquetes completos (lo que compras)</option>
+              <option value="UNIT">Unidades sueltas (ml, g, pz)</option>
+            </select>
             <input name="reason" placeholder="Motivo (compra, consumo, merma…)" required minLength={4} />
             <button className="reference-primary" disabled={busy || !supplies.length}>
               Registrar movimiento
@@ -354,32 +409,52 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
             <label>Nombre</label>
             <input name="name" defaultValue={editing.name} required minLength={2} maxLength={80} />
 
-            <div className="price-cost-fields">
-              <div>
-                <label>Unidad</label>
-                <select name="unit" defaultValue={editing.unit} required>
-                  {UNITS.map((unit) => (
-                    <option value={unit} key={unit}>
-                      {unit}
-                    </option>
-                  ))}
-                  {!UNITS.includes(editing.unit) && (
-                    <option value={editing.unit}>{editing.unit}</option>
-                  )}
-                </select>
-              </div>
-              <div>
-                <label>Costo por unidad</label>
-                <input
-                  name="cost"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  defaultValue={editing.cost || ""}
-                  placeholder="0.00"
-                />
-              </div>
+            <label>Se usa y se mide en</label>
+            <select name="unit" defaultValue={editing.unit} required>
+              {UNITS.map((unit) => (
+                <option value={unit} key={unit}>
+                  {unit}
+                </option>
+              ))}
+              {!UNITS.includes(editing.unit) && (
+                <option value={editing.unit}>{editing.unit}</option>
+              )}
+            </select>
+
+            <label>Cómo lo compras</label>
+            <div className="supply-pack">
+              <select name="packLabel" defaultValue={editing.packLabel || "paquete"}>
+                {PACK_LABELS.map((label) => (
+                  <option value={label} key={label}>
+                    {label}
+                  </option>
+                ))}
+                {editing.packLabel && !PACK_LABELS.includes(editing.packLabel) && (
+                  <option value={editing.packLabel}>{editing.packLabel}</option>
+                )}
+              </select>
+              <input
+                name="packSize"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue={editing.packSize || ""}
+                placeholder="de… (600)"
+              />
+              <input
+                name="packCost"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue={editing.packCost || ""}
+                placeholder="cuesta $"
+              />
             </div>
+            <small className="editor-note">
+              Corrige aquí cuando suba el precio: todas las recetas que usan este insumo se
+              recostean solas. Ahorita cada {editing.unit} sale en{" "}
+              <strong>{unitMoney.format(unitCost(editing))}</strong>.
+            </small>
 
             <label>Avisar cuando baje de</label>
             <input

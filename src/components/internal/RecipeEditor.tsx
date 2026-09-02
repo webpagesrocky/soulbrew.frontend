@@ -1,30 +1,38 @@
-import { useEffect, useState } from "react";
-import { setCategoryRecipe, subscribeSupplies } from "../../api/collections";
+import { useEffect, useMemo, useState } from "react";
+import { subscribeSupplies } from "../../api/collections";
+import { unitCost } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
-import type { Category, RecipeItem, Supply } from "../../types";
+import type { RecipeItem, Supply } from "../../types";
 
-/** Tope por categoría. Lo imponen las reglas de Firestore, que validan la
- *  receta ingrediente por ingrediente porque CEL no tiene bucles. */
+/** Tope por receta. Lo imponen las reglas de Firestore, que la validan
+ *  ingrediente por ingrediente porque CEL no tiene bucles. */
 const MAX_INGREDIENTS = 8;
 
+const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+
 interface Props {
-  category: Category;
+  title: string;
+  /** Explica a qué aplica la receta y qué pasa si se deja vacía. */
+  hint: React.ReactNode;
+  recipe: RecipeItem[];
+  /** Receta que se usaría si ésta se deja vacía (la de la categoría). */
+  fallback?: { label: string; recipe: RecipeItem[] };
+  onSave: (recipe: RecipeItem[]) => Promise<void>;
   onClose: () => void;
-  onSaved: (message: string) => void;
   onError: (message: string) => void;
 }
 
 /**
- * Receta de una categoría: qué insumos y cuánto consume **cada unidad
- * vendida** de cualquier producto suyo.
+ * Editor de receta: qué insumos y cuánto consume **una unidad vendida**.
  *
- * Vive en la categoría y no en el producto porque las bebidas de una misma
- * familia llevan prácticamente la misma base, y así son 4 recetas que
- * mantener en vez de una por producto del menú.
+ * Sirve igual para una categoría (la receta base de toda su familia) y para un
+ * producto suelto que lleve algo distinto. De paso va mostrando cuánto cuesta
+ * lo que se está armando, que es el número que acaba usando el reporte de
+ * ganancias.
  */
-export function RecipeEditor({ category, onClose, onSaved, onError }: Props) {
+export function RecipeEditor({ title, hint, recipe, fallback, onSave, onClose, onError }: Props) {
   const [supplies, setSupplies] = useState<Supply[]>([]);
-  const [rows, setRows] = useState<RecipeItem[]>(category.recipe);
+  const [rows, setRows] = useState<RecipeItem[]>(recipe);
   const [busy, setBusy] = useState(false);
 
   useEffect(
@@ -36,11 +44,19 @@ export function RecipeEditor({ category, onClose, onSaved, onError }: Props) {
     [onError],
   );
 
+  const byId = useMemo(() => new Map(supplies.map((supply) => [supply.id, supply])), [supplies]);
   const used = new Set(rows.map((row) => row.supplyId));
   const available = supplies.filter((supply) => !used.has(supply.id));
 
+  const shown = rows.length ? rows : (fallback?.recipe ?? []);
+  const inherited = rows.length === 0 && (fallback?.recipe.length ?? 0) > 0;
+  const total = shown.reduce((sum, row) => {
+    const supply = byId.get(row.supplyId);
+    return sum + (supply ? unitCost(supply) * row.quantity : 0);
+  }, 0);
+
   function addRow(supplyId: string) {
-    const supply = supplies.find((item) => item.id === supplyId);
+    const supply = byId.get(supplyId);
     if (!supply) return;
     setRows((current) => [
       ...current,
@@ -54,24 +70,15 @@ export function RecipeEditor({ category, onClose, onSaved, onError }: Props) {
     );
   }
 
-  function removeRow(supplyId: string) {
-    setRows((current) => current.filter((row) => row.supplyId !== supplyId));
-  }
-
   async function save() {
-    // Una cantidad en cero o negativa haría que la venta no descuente nada y
-    // las reglas la rechazan, así que se avisa aquí en vez de dejarla fallar.
+    // Una cantidad en cero haría que vender no descuente nada y las reglas la
+    // rechazan, así que se avisa aquí en vez de dejar que falle el guardado.
     if (rows.some((row) => !(row.quantity > 0))) {
       return onError("Cada ingrediente necesita una cantidad mayor que cero.");
     }
     setBusy(true);
     try {
-      await setCategoryRecipe(category.id, rows);
-      onSaved(
-        rows.length
-          ? `Receta de "${category.name}" guardada: ${rows.length} ${rows.length === 1 ? "insumo" : "insumos"} por unidad vendida.`
-          : `"${category.name}" ya no descuenta insumos al vender.`,
-      );
+      await onSave(rows);
       onClose();
     } catch (reason) {
       onError(errorMessage(reason, "No se pudo guardar la receta"));
@@ -84,53 +91,71 @@ export function RecipeEditor({ category, onClose, onSaved, onError }: Props) {
     <div className="editor-backdrop" onClick={onClose}>
       <div className="editor-card compact-form" onClick={(event) => event.stopPropagation()}>
         <div className="editor-head">
-          <h2>
-            Receta · {category.emoji} {category.name}
-          </h2>
+          <h2>{title}</h2>
           <button type="button" onClick={onClose} aria-label="Cerrar">
             ✕
           </button>
         </div>
 
-        <p className="editor-note">
-          Lo que consume <strong>una unidad vendida</strong> de esta categoría. Al cobrar un pedido se
-          descuenta solo de los insumos.
-        </p>
+        <p className="editor-note">{hint}</p>
+
+        {inherited && (
+          <div className="notice success">
+            Hereda la receta de {fallback!.label}. Si agregas ingredientes aquí, esta receta
+            reemplaza a la suya por completo.
+          </div>
+        )}
 
         <div className="recipe-rows">
-          {rows.map((row) => (
-            <div className="recipe-row" key={row.supplyId}>
-              <span className="recipe-name">{row.supplyName}</span>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={row.quantity}
-                onChange={(event) => setQuantity(row.supplyId, Number(event.target.value))}
-                aria-label={`Cantidad de ${row.supplyName}`}
-              />
-              <span className="recipe-unit">{row.unit}</span>
-              <button
-                type="button"
-                className="category-delete"
-                onClick={() => removeRow(row.supplyId)}
-                aria-label={`Quitar ${row.supplyName}`}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-          {!rows.length && (
+          {shown.map((row) => {
+            const supply = byId.get(row.supplyId);
+            const cost = supply ? unitCost(supply) * row.quantity : 0;
+            return (
+              <div className="recipe-row" key={row.supplyId}>
+                <span className="recipe-name">
+                  {row.supplyName}
+                  {!supply && <small className="forecast-flag"> · ya no existe</small>}
+                </span>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={row.quantity}
+                  disabled={inherited}
+                  onChange={(event) => setQuantity(row.supplyId, Number(event.target.value))}
+                  aria-label={`Cantidad de ${row.supplyName}`}
+                />
+                <span className="recipe-unit">{row.unit}</span>
+                <span className="recipe-cost">{supply ? money.format(cost) : "—"}</span>
+                <button
+                  type="button"
+                  className="category-delete"
+                  disabled={inherited}
+                  onClick={() => setRows((c) => c.filter((r) => r.supplyId !== row.supplyId))}
+                  aria-label={`Quitar ${row.supplyName}`}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+          {!shown.length && (
             <p className="reference-empty">
-              Sin receta: vender esta categoría no descuenta ningún insumo.
+              Sin receta: vender esto no descuenta insumos y su costo queda como esté capturado a
+              mano.
             </p>
           )}
         </div>
 
+        {shown.length > 0 && (
+          <div className="recipe-total">
+            <span>Costo por unidad</span>
+            <strong>{money.format(total)}</strong>
+          </div>
+        )}
+
         {rows.length >= MAX_INGREDIENTS ? (
-          <small className="editor-note">
-            Máximo {MAX_INGREDIENTS} insumos por categoría.
-          </small>
+          <small className="editor-note">Máximo {MAX_INGREDIENTS} insumos por receta.</small>
         ) : (
           <select
             value=""
@@ -140,11 +165,15 @@ export function RecipeEditor({ category, onClose, onSaved, onError }: Props) {
             }}
           >
             <option value="" disabled>
-              {available.length ? "+ Agregar insumo…" : "No quedan insumos por agregar"}
+              {available.length
+                ? inherited
+                  ? "+ Agregar insumo (empieza una receta propia)…"
+                  : "+ Agregar insumo…"
+                : "No quedan insumos por agregar"}
             </option>
             {available.map((supply) => (
               <option value={supply.id} key={supply.id}>
-                {supply.name} ({supply.unit})
+                {supply.name} ({supply.unit} · {money.format(unitCost(supply))} c/u)
               </option>
             ))}
           </select>
@@ -160,7 +189,12 @@ export function RecipeEditor({ category, onClose, onSaved, onError }: Props) {
           <button type="button" onClick={onClose} disabled={busy}>
             Cancelar
           </button>
-          <button type="button" className="reference-primary" disabled={busy} onClick={() => void save()}>
+          <button
+            type="button"
+            className="reference-primary"
+            disabled={busy}
+            onClick={() => void save()}
+          >
             {busy ? "Guardando…" : "Guardar receta"}
           </button>
         </div>

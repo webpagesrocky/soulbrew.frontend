@@ -813,11 +813,19 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 
 /* Editor de receta: nombre del insumo, cantidad, unidad y quitar. */
 .recipe-rows { margin: 4px 0 10px; }
-.recipe-row { display: grid; grid-template-columns: minmax(0, 1fr) 82px 44px auto; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--ref-border); }
+.recipe-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 38px 64px auto; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--ref-border); }
 .recipe-row:last-child { border-bottom: 0; }
 .recipe-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recipe-row input { margin: 0; text-align: right; }
 .recipe-unit { color: #9b765c; font-size: 11px; }
+.recipe-cost { text-align: right; font-size: 11px; color: #6b4226; font-weight: 650; }
+.recipe-total { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; margin-bottom: 8px; border-top: 1px solid var(--ref-border); font-size: 13px; }
+.recipe-total strong { font-size: 15px; color: #6b4226; }
+
+/* Alta de insumo: presentación de compra (paquete · tamaño · precio). */
+.supply-pack { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.supply-pack > * { margin: 0; }
+.supply-pack-note { color: #9b765c; font-weight: 400; }
 .pill-on { background: #e6efdd; color: #4c6b39; }
 .pill-off { background: #f0ebe5; color: #8a7361; }
 .category-delete { background: transparent; color: #b26c55; padding: 4px 6px; }
@@ -825,9 +833,9 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .category-add { grid-template-columns: 58px minmax(0, 1fr) auto; }
 .reference-product {
   display: grid;
-  grid-template-columns: 53px minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 53px minmax(0, 1fr) auto auto auto auto;
   align-items: center;
-  gap: 13px;
+  gap: 11px;
   min-height: 75px;
   border-bottom: 1px solid var(--ref-border);
 }
@@ -903,8 +911,12 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
   .compact-order { grid-template-columns: 1fr auto; padding: 8px 0; }
   .compact-order .reference-status { grid-column: 1 / -1; justify-self: start; }
   .menu-side-stack { grid-template-columns: 1fr; }
-  .reference-product { grid-template-columns: 43px minmax(0, 1fr) auto auto; padding: 8px 0; gap: 9px; }
-  .product-thumbnail { width: 43px; height: 43px; }
+  /* En móvil los dos interruptores (receta y agotado) bajan a su propio
+     renglón: en una sola línea no cabrían sin partir el nombre del producto. */
+  .reference-product { grid-template-columns: 43px minmax(0, 1fr) auto auto; padding: 8px 0; gap: 9px 8px; }
+  .product-thumbnail { width: 43px; height: 43px; grid-row: span 2; }
+  .reference-product > .avail-toggle { grid-row: 2; }
+  .reference-product > .avail-toggle:first-of-type { grid-column: 2; justify-self: start; }
   .reference-product > span { display: none; }
   .product-edit { padding: 6px 9px; }
   .reference-heading-row { align-items: stretch; }

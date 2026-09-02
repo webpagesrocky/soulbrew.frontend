@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { categoryId, createCategory, deleteCategory, updateCategory } from "../../api/collections";
+import {
+  categoryId,
+  createCategory,
+  deleteCategory,
+  setCategoryRecipe,
+  updateCategory,
+} from "../../api/collections";
 import { errorMessage } from "../../api/errors";
 import type { Category, Product } from "../../types";
 import { RecipeEditor } from "./RecipeEditor";
@@ -136,9 +142,23 @@ export function CategoryManager({ categories, products, onMessage, onError }: Pr
         ingrediente enviaría el alta de categoría en vez de guardar la receta. */}
     {recipeOf && (
       <RecipeEditor
-        category={recipeOf}
+        title={`Receta · ${recipeOf.emoji} ${recipeOf.name}`}
+        hint={
+          <>
+            Lo que consume <strong>una unidad vendida</strong> de esta categoría. La usan todos sus
+            productos, salvo los que tengan receta propia.
+          </>
+        }
+        recipe={recipeOf.recipe}
+        onSave={async (recipe) => {
+          await setCategoryRecipe(recipeOf.id, recipe);
+          onMessage(
+            recipe.length
+              ? `Receta de "${recipeOf.name}" guardada: ${recipe.length} ${recipe.length === 1 ? "insumo" : "insumos"} por unidad.`
+              : `"${recipeOf.name}" ya no descuenta insumos al vender.`,
+          );
+        }}
         onClose={() => setRecipeOf(null)}
-        onSaved={onMessage}
         onError={onError}
       />
     )}

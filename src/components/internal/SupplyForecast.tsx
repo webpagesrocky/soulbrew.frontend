@@ -7,6 +7,7 @@ import {
   subscribeSupplies,
   subscribeSupplyMovements,
 } from "../../api/collections";
+import { effectiveRecipe, unitCost } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
 import type { Category, Order, Product, Supply, SupplyMovement } from "../../types";
 import { Icon } from "../Icon";
@@ -118,16 +119,18 @@ export function SupplyForecast({ onError }: Props) {
   );
 
   const rows = useMemo(() => {
-    const categoryOfProduct = new Map(products.map((product) => [product.id, product.category]));
-    const recipeOfCategory = new Map(categories.map((category) => [category.id, category.recipe]));
+    // Receta que aplica a cada producto: la suya si la tiene, si no la de su
+    // categoría — la misma resolución que usa el cobro.
+    const recipeOfProduct = new Map(
+      products.map((product) => [product.id, effectiveRecipe(product, categories)]),
+    );
 
-    // Consumo del periodo = ventas cobradas × receta de su categoría.
+    // Consumo del periodo = ventas cobradas × receta.
     const consumed = new Map<string, number>();
     for (const order of orders) {
       if (order.status !== "PAID") continue;
       for (const item of order.items) {
-        const category = categoryOfProduct.get(item.productId);
-        for (const ingredient of recipeOfCategory.get(category ?? "") ?? []) {
+        for (const ingredient of recipeOfProduct.get(item.productId) ?? []) {
           const total =
             (consumed.get(ingredient.supplyId) ?? 0) + ingredient.quantity * item.quantity;
           consumed.set(ingredient.supplyId, total);
@@ -153,14 +156,19 @@ export function SupplyForecast({ onError }: Props) {
         const perDay = used / PERIOD_DAYS;
         // Se proyecta que la próxima quincena consuma lo mismo que ésta, y se
         // pide lo que falte para cubrirla dejando el mínimo de reserva.
-        const suggested = roundUp(Math.max(0, used + supply.minStock - supply.stock), supply.unit);
+        const needed = Math.max(0, used + supply.minStock - supply.stock);
+        // Se compra por paquete completo: pedir "1.4 paquetes" no sirve de nada
+        // en la tienda, así que se redondea hacia arriba.
+        const packs = supply.packSize > 0 ? Math.ceil(needed / supply.packSize) : 0;
+        const suggested = packs > 0 ? packs * supply.packSize : roundUp(needed, supply.unit);
         const daysLeft = perDay > 0 ? supply.stock / perDay : null;
         return {
           supply,
           used,
           bought,
           suggested,
-          suggestedCost: suggested * supply.cost,
+          packs,
+          suggestedCost: packs > 0 ? packs * supply.packCost : suggested * unitCost(supply),
           daysLeft,
           low: supply.minStock > 0 && supply.stock <= supply.minStock,
           // Se queda corto antes de que termine la próxima quincena.
@@ -174,8 +182,8 @@ export function SupplyForecast({ onError }: Props) {
   const totals = {
     cost: shoppingList.reduce((sum, row) => sum + row.suggestedCost, 0),
     urgent: rows.filter((row) => row.low || row.runsOut).length,
-    consumedCost: rows.reduce((sum, row) => sum + row.used * row.supply.cost, 0),
-    boughtCost: rows.reduce((sum, row) => sum + row.bought * row.supply.cost, 0),
+    consumedCost: rows.reduce((sum, row) => sum + row.used * unitCost(row.supply), 0),
+    boughtCost: rows.reduce((sum, row) => sum + row.bought * unitCost(row.supply), 0),
   };
 
   const withRecipe = categories.filter((category) => category.recipe.length > 0).length;
@@ -271,7 +279,11 @@ export function SupplyForecast({ onError }: Props) {
                     : `${Math.floor(row.daysLeft)} días`}
               </span>
               <strong>
-                {row.suggested ? `${row.suggested} ${row.supply.unit}` : "—"}
+                {!row.suggested
+                  ? "—"
+                  : row.packs > 0
+                    ? `${row.packs} ${row.supply.packLabel}${row.packs === 1 ? "" : "s"}`
+                    : `${row.suggested} ${row.supply.unit}`}
               </strong>
               <span>{row.suggestedCost ? money.format(row.suggestedCost) : "—"}</span>
             </div>
@@ -283,9 +295,10 @@ export function SupplyForecast({ onError }: Props) {
           )}
         </div>
         <small className="editor-note">
-          "Comprar" es un aproximado: asume que la próxima quincena se vende lo mismo que ésta, y
-          pide lo que falte para cubrirla dejando tu mínimo de reserva. Se calcula con las ventas
-          cobradas y la receta de cada categoría, así que una venta cancelada deja de contar sola.
+          "Comprar" es un aproximado: asume que la próxima quincena se vende lo mismo que ésta, pide
+          lo que falte para cubrirla dejando tu mínimo de reserva, y lo redondea a paquetes
+          completos. Se calcula con las ventas cobradas y la receta de cada producto, así que una
+          venta cancelada deja de contar sola.
         </small>
       </article>
 

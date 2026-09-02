@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { deleteProduct, updateProduct } from "../../api/collections";
+import { effectiveRecipe } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
 import type { Category, Product } from "../../types";
 import { ImageField } from "./ImageField";
@@ -15,6 +16,9 @@ interface Props {
 export function ProductEditor({ product, categories, onClose, onSaved, onError }: Props) {
   const [image, setImage] = useState<string | null>(product.imageUrl);
   const [busy, setBusy] = useState(false);
+
+  // Con receta, el costo se calcula de los insumos y el campo manual sobra.
+  const hasRecipe = effectiveRecipe(product, categories).length > 0;
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -114,7 +118,7 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
             />
           </div>
           <div>
-            <label>Costo</label>
+            <label>Costo de respaldo</label>
             <input
               name="cost"
               type="number"
@@ -122,12 +126,22 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
               step="0.01"
               defaultValue={product.cost || ""}
               placeholder="0.00"
+              disabled={hasRecipe}
             />
           </div>
         </div>
         <p className="editor-note">
-          El costo se usa para calcular la ganancia en el reporte semanal. Si lo dejas vacío,
-          ese producto cuenta como costo cero.
+          {hasRecipe ? (
+            <>
+              Este producto ya tiene receta, así que su costo se calcula solo de los insumos y este
+              campo queda apagado. Ajusta la receta con el botón <strong>Receta</strong> de la lista.
+            </>
+          ) : (
+            <>
+              Mientras no tenga receta, la ganancia del reporte usa este número. En cuanto le pongas
+              receta (suya o de su categoría), el costo pasa a salir de los insumos y esto se ignora.
+            </>
+          )}
         </p>
 
         <label>Imagen</label>
