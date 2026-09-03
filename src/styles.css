@@ -829,7 +829,7 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .supply-pack { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .supply-pack > * { margin: 0; }
 /* "paquete · de 1 · L · cuesta $": el tamaño y su unidad van pegados. */
-.supply-buy { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) 62px minmax(0, 1fr); gap: 6px; margin-bottom: 9px; }
+.supply-buy { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr) minmax(0, .8fr) 58px; gap: 6px; margin-bottom: 6px; }
 .supply-buy > * { margin: 0; }
 /* "30" [ml] = 0.03 L · $0.84 por bebida */
 .supply-portion { display: grid; grid-template-columns: 86px 62px minmax(0, 1fr); gap: 6px; align-items: center; margin-bottom: 9px; }
