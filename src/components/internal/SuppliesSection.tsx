@@ -42,6 +42,11 @@ const UNITS = [
 
 const PACK_LABELS = ["paquete", "caja", "bolsa", "galón", "bote", "pieza"];
 
+/** Redondeo a 2 decimales: dividir y multiplicar deja colas como 49439.999999. */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 /** Cuánto pesa un litro. Calibrado a la leche, que es el líquido de la barra. */
 const GRAMS_PER_LITRE = 1030;
 
@@ -109,6 +114,14 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
   const [movements, setMovements] = useState<SupplyMovement[]>([]);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<Supply | null>(null);
+  /** Existencia corregida, en paquetes, mientras el editor está abierto. */
+  const [editPacks, setEditPacks] = useState("");
+
+  /** Abre el editor con la existencia ya expresada en paquetes. */
+  function openEditor(supply: Supply) {
+    setEditing(supply);
+    setEditPacks(supply.packSize > 0 ? String(round2(supply.stock / supply.packSize)) : "");
+  }
 
   // Alta de insumo: a qué productos se le mete de una vez.
   const [products, setProducts] = useState<Product[]>([]);
@@ -395,6 +408,7 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
     event.preventDefault();
     if (!editing) return;
     const data = new FormData(event.currentTarget);
+    const packSize = Number(data.get("packSize") ?? 0) || 0;
     setBusy(true);
     try {
       await updateSupply(editing.id, {
@@ -402,15 +416,32 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
         unit: String(data.get("unit")),
         minStock: Number(data.get("minStock") ?? 0) || 0,
         packLabel: String(data.get("packLabel") ?? "paquete"),
-        packSize: Number(data.get("packSize") ?? 0) || 0,
+        packSize,
         packCost: Number(data.get("packCost") ?? 0) || 0,
-        // La existencia no se edita aquí: se mueve con entradas y salidas para
-        // que siempre quede el motivo registrado.
+        // La existencia va aparte, por moveSupply, para que la corrección
+        // quede anotada en la bitácora en vez de cambiar el número a secas.
         stock: editing.stock,
         active: data.get("active") === "on",
       });
+
+      // Corrección de existencia: se captura en paquetes, que es como se
+      // cuenta el almacén, y se guarda en la unidad en que se mide.
+      const correctedStock = round2((Number(editPacks) || 0) * packSize);
+      const delta = round2(correctedStock - editing.stock);
+      let note = "";
+      if (delta !== 0) {
+        await moveSupply(
+          editing.id,
+          delta,
+          "Corrección de existencia",
+          { uid: user.id, name: user.name },
+          "ADJUSTMENT",
+        );
+        note = ` La existencia quedó en ${num.format(correctedStock)} ${editing.unit}.`;
+      }
+
       setEditing(null);
-      onMessage("Insumo actualizado.");
+      onMessage(`Insumo actualizado.${note}`);
     } catch (reason) {
       onError(errorMessage(reason, "No se pudo actualizar el insumo"));
     } finally {
@@ -546,7 +577,7 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                     : "—"}
                 </span>
                 {canManage ? (
-                  <button className="product-edit" onClick={() => setEditing(supply)}>
+                  <button className="product-edit" onClick={() => openEditor(supply)}>
                     Editar
                   </button>
                 ) : (
@@ -1021,9 +1052,38 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
               <span>Activo</span>
             </label>
 
+            <label>¿Cuántos {editing.packLabel}s tienes?</label>
+            <div className="supply-inline">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={editPacks}
+                onChange={(event) => setEditPacks(event.target.value)}
+                placeholder="0"
+              />
+              <span className="supply-suffix">
+                {editing.packLabel}s
+                {editing.packSize > 0 && Number(editPacks) >= 0 && (
+                  <>
+                    {" "}= {num.format(round2((Number(editPacks) || 0) * editing.packSize))}{" "}
+                    {editing.unit}
+                  </>
+                )}
+              </span>
+            </div>
             <small className="editor-note">
-              Existencia actual: {editing.stock} {editing.unit}. No se edita aquí — se mueve con
-              entradas y salidas para que siempre quede el motivo.
+              Corrige aquí si te equivocaste al registrar. Ahorita hay{" "}
+              <strong>
+                {num.format(editing.stock)} {editing.unit}
+              </strong>
+              {editing.packSize > 0 && (
+                <>
+                  {" "}({num.format(round2(editing.stock / editing.packSize))} {editing.packLabel}
+                  {round2(editing.stock / editing.packSize) === 1 ? "" : "s"})
+                </>
+              )}
+              . El cambio queda anotado en la bitácora con tu nombre.
             </small>
 
             <div className="editor-actions">
