@@ -19,6 +19,12 @@ import { Icon } from "../Icon";
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 /** Cantidades: con separador de miles y sin decimales de más. */
 const num = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 });
+/** Costo por bebida: a pesos redondos, que es como se piensa al poner precios. */
+const pesos = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 0,
+});
 
 /**
  * Unidades en las que se *usa* el insumo, que es como se lleva la existencia y
@@ -36,25 +42,38 @@ const UNITS = [
 
 const PACK_LABELS = ["paquete", "caja", "bolsa", "galón", "bote", "pieza"];
 
+/** Cuánto pesa un litro. Calibrado a la leche, que es el líquido de la barra. */
+const GRAMS_PER_LITRE = 1030;
+
 /**
  * Equivalencia de cada unidad con una base común, para que el paquete se
  * capture como se compra y la receta como se mide: "paquetes de 1 L" y "cada
  * bebida lleva 250 g" acaban siendo el mismo insumo.
  *
- * Peso y volumen se tratan como lo mismo: 1 L = 1000 g, como el agua. En
- * rigor no es exacto (un litro de leche pesa ~1030 g, uno de jarabe ~1300),
- * pero preguntarle la densidad a quien está dando de alta la leche cuesta más
- * de lo que vale ese 3%. Quien quiera el número fino captura el paquete
- * directamente en la unidad que mide, y entonces no se convierte nada.
+ * El puente entre volumen y peso está fijado al peso de la leche. No es
+ * universal —un litro de jarabe pesa más, uno de aceite menos—, pero
+ * preguntarle la densidad a quien está dando de alta un insumo cuesta más de
+ * lo que valen esos puntos porcentuales. La pantalla siempre enseña la cuenta
+ * con la que está trabajando, y quien necesite otro número captura el paquete
+ * directamente en la unidad que mide, sin conversión de por medio.
  */
 const CONVERSIONS: Record<string, { base: string; factor: number }> = {
-  ml: { base: "medida", factor: 1 },
-  L: { base: "medida", factor: 1000 },
+  ml: { base: "medida", factor: GRAMS_PER_LITRE / 1000 },
+  L: { base: "medida", factor: GRAMS_PER_LITRE },
   g: { base: "medida", factor: 1 },
   kg: { base: "medida", factor: 1000 },
   oz: { base: "medida", factor: 28.3495 },
   pz: { base: "pz", factor: 1 },
 };
+
+const VOLUME_UNITS = ["ml", "L"];
+
+/** true cuando el paquete se compra por volumen y la receta se mide por peso, o al revés. */
+function crossesVolumeAndWeight(from: string, to: string): boolean {
+  const a = VOLUME_UNITS.includes(from);
+  const b = VOLUME_UNITS.includes(to);
+  return CONVERSIONS[from]?.base === CONVERSIONS[to]?.base && a !== b;
+}
 
 /** Unidades en las que se puede vender un insumo que se usa en `unit`. */
 function packUnitsFor(unit: string) {
@@ -571,9 +590,18 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                 <div className="notice success">
                   {newPackPieces} piezas × {newPackSize} {newPackUnit} ={" "}
                   <strong>
-                    {num.format(packSizeInUnits)} {newUnit}
-                  </strong>{" "}
-                  por {money.format(Number(newPackCost))}.
+                    {num.format(packTotalBought)} {newPackUnit}
+                  </strong>
+                  {crossesVolumeAndWeight(newPackUnit, newUnit) && (
+                    <>
+                      {" "}={" "}
+                      <strong>
+                        {num.format(packSizeInUnits)} {newUnit}
+                      </strong>{" "}
+                      (1 L pesa {GRAMS_PER_LITRE} g)
+                    </>
+                  )}
+                  , por {money.format(Number(newPackCost))}.
                   <br />
                   Abajo, al marcar las bebidas, te digo cuánto cuesta cada una.
                 </div>
@@ -696,9 +724,10 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                   {linkQtyInUnits > 0 && newUnitCost > 0 && (
                     <div className="notice success">
                       Cada bebida te cuesta{" "}
-                      <strong>{money.format(linkQtyInUnits * newUnitCost)}</strong> de{" "}
-                      {newName.trim() || "este insumo"}
-                      . Un {newPackLabel} te alcanza para{" "}
+                      <strong>{pesos.format(linkQtyInUnits * newUnitCost)}</strong> de{" "}
+                      {newName.trim() || "este insumo"} ({money.format(linkQtyInUnits * newUnitCost)}).
+                      <br />
+                      Un {newPackLabel} te alcanza para{" "}
                       <strong>{Math.floor(packSizeInUnits / linkQtyInUnits)} bebidas</strong>.
                     </div>
                   )}
