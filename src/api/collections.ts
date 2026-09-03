@@ -433,6 +433,18 @@ export async function deleteSupply(id: string) {
 }
 
 /** Borra un pedido. Sale del historial y del reporte; no descuadra cortes ya cerrados. */
+/**
+ * Borra un renglón de la bitácora de insumos.
+ *
+ * Sólo quita el registro: la existencia queda como está. Es a propósito —
+ * revertirla daría por hecho que nada se movió desde entonces, y lo normal es
+ * que sí. Para cuadrar la cantidad se corrige el insumo, que a su vez deja su
+ * propio renglón.
+ */
+export async function deleteSupplyMovement(id: string) {
+  await deleteDoc(doc(db, "supplyMovements", id));
+}
+
 /** Borra un corte de caja. Las reglas sólo lo permiten si ya está cerrado. */
 export async function deleteCashSession(id: string) {
   await deleteDoc(doc(db, "cashSessions", id));

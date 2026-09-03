@@ -4,6 +4,7 @@ import {
   addIngredientToProducts,
   createSupply,
   deleteSupply,
+  deleteSupplyMovement,
   subscribeCategories,
   subscribeProducts,
   subscribeSupplies,
@@ -444,6 +445,29 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
       onMessage(`Insumo actualizado.${note}`);
     } catch (reason) {
       onError(errorMessage(reason, "No se pudo actualizar el insumo"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeMovement(movement: SupplyMovement) {
+    const sign = movement.quantityChange > 0 ? "+" : "";
+    if (
+      !window.confirm(
+        `¿Borrar este movimiento?\n\n` +
+          `${sign}${movement.quantityChange} ${movement.unit} de ${movement.supplyName} — ${movement.reason}\n\n` +
+          "Ojo: sólo desaparece del registro. La existencia NO cambia.\n" +
+          "Si lo que quieres es corregir la cantidad, usa el botón Editar del insumo.",
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await deleteSupplyMovement(movement.id);
+      onMessage("Movimiento borrado del registro. La existencia no cambió.");
+    } catch (reason) {
+      onError(errorMessage(reason, "No se pudo borrar el movimiento"));
     } finally {
       setBusy(false);
     }
@@ -946,23 +970,41 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
           <span>{movements.length} esta semana</span>
         </div>
         <div className="report-table">
-          <div className="report-head">
+          <div className={`report-head ${canManage ? "movement-head" : ""}`}>
             <span>Insumo</span>
             <span>Tipo</span>
             <span>Cant.</span>
             <span>Motivo</span>
             <span>Quién</span>
+            {canManage && <span />}
           </div>
           {movements.map((movement) => (
-            <div className="report-row" key={movement.id}>
+            <div className={`report-row ${canManage ? "movement-head" : ""}`} key={movement.id}>
               <span>{movement.supplyName}</span>
-              <span>{movement.quantityChange > 0 ? "Entrada" : "Salida"}</span>
+              <span>
+                {movement.type === "WASTE"
+                  ? "Merma"
+                  : movement.type === "PURCHASE"
+                    ? "Compra"
+                    : "Ajuste"}
+              </span>
               <span className={movement.quantityChange > 0 ? "stock-in" : "stock-out"}>
-                {movement.quantityChange > 0 ? `+${movement.quantityChange}` : movement.quantityChange}{" "}
+                {movement.quantityChange > 0 ? `+${num.format(movement.quantityChange)}` : num.format(movement.quantityChange)}{" "}
                 {movement.unit}
               </span>
               <span>{movement.reason}</span>
               <span>{movement.userName}</span>
+              {canManage && (
+                <button
+                  type="button"
+                  className="category-delete"
+                  disabled={busy}
+                  title="Borrar del registro"
+                  onClick={() => void removeMovement(movement)}
+                >
+                  ✕
+                </button>
+              )}
             </div>
           ))}
           {!movements.length && (

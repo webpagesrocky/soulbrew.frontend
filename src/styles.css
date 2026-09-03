@@ -731,6 +731,8 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .supply-head { grid-template-columns: minmax(0, 1.9fr) minmax(78px, 1.1fr) minmax(64px, .9fr) minmax(70px, 1fr) auto; }
 .forecast-head { grid-template-columns: minmax(0, 2fr) repeat(6, minmax(52px, 1fr)); }
 .forecast-flag { color: #b1492f; font-weight: 700; }
+/* Bitácora de insumos con botón de borrar al final del renglón. */
+.movement-head { grid-template-columns: minmax(0, 2fr) repeat(4, minmax(56px, 1fr)) auto; }
 .supply-off { color: #b2452a; font-size: 10px; }
 .supply-forms { display: grid; gap: 16px; align-content: start; }
 .supply-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
