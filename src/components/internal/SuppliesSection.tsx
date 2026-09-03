@@ -97,6 +97,21 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
   const [linkAll, setLinkAll] = useState(false);
   const [linkIds, setLinkIds] = useState<string[]>([]);
   const [linkQty, setLinkQty] = useState("");
+  const [linkUnit, setLinkUnit] = useState("ml");
+
+  // "Volví a comprar" / "Corregir el conteo". Se separan porque son dos cosas
+  // que se piensan distinto: una se cuenta en paquetes que llegaron, la otra
+  // se cuenta mirando lo que hay. Restar a mano no se le pide a nadie.
+  const [moveMode, setMoveMode] = useState<"BUY" | "COUNT">("BUY");
+  const [moveSupplyId, setMoveSupplyId] = useState("");
+  const [moveQty, setMoveQty] = useState("");
+
+  const moveTarget = supplies.find((supply) => supply.id === moveSupplyId) ?? null;
+  const moveDelta = !moveTarget
+    ? 0
+    : moveMode === "BUY"
+      ? (Number(moveQty) || 0) * moveTarget.packSize
+      : (Number(moveQty) || 0) - moveTarget.stock;
 
   // Campos controlados del alta: hacen falta para ir mostrando la unidad y el
   // costo por unidad mientras se escribe, en vez de hasta después de guardar.
@@ -111,6 +126,10 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
   // la unidad en que se usa ("1000 ml"), que es en la que vive la existencia.
   const packSizeInUnits = convert(Number(newPackSize) || 0, newPackUnit, newUnit);
   const newUnitCost = packSizeInUnits > 0 ? (Number(newPackCost) || 0) / packSizeInUnits : 0;
+
+  // Lo mismo para la porción de la receta: se escribe como se dice ("30 ml",
+  // "15 g") y se guarda en la unidad del insumo.
+  const linkQtyInUnits = convert(Number(linkQty) || 0, linkUnit, newUnit);
 
   const canManage = user.role === "ADMIN" || user.role === "SUPERVISOR";
 
@@ -205,7 +224,7 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
       }
 
       // Segundo paso opcional: meterlo de una vez en las recetas que lo usan.
-      const quantity = Number(linkQty);
+      const quantity = linkQtyInUnits;
       let linkNote = "";
       if (linkCategory && quantity > 0) {
         const ingredient = { supplyId, supplyName: name, unit, quantity };
@@ -231,38 +250,32 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
 
   async function move(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const supplyId = String(data.get("supplyId"));
-    const supply = supplies.find((item) => item.id === supplyId);
-    const direction = String(data.get("direction"));
-    let amount = Math.abs(Number(data.get("quantity")));
-
-    // Se compra por paquete pero se lleva la existencia en unidades de uso:
-    // "5 paquetes" de leche de 600 ml entran como 3000 ml.
-    if (String(data.get("mode")) === "PACK" && supply && supply.packSize > 0) {
-      amount = amount * supply.packSize;
+    if (!moveTarget) return onError("Elige un insumo.");
+    if (!moveDelta) {
+      return onError(
+        moveMode === "BUY"
+          ? "Escribe cuántos paquetes llegaron."
+          : "Ese es el número que ya tenía registrado, no hay nada que corregir.",
+      );
     }
 
     setBusy(true);
     try {
       await moveSupply(
-        supplyId,
-        direction === "OUT" ? -amount : amount,
-        String(data.get("reason")),
+        moveTarget.id,
+        moveDelta,
+        moveMode === "BUY" ? "Compra de mercancía" : "Corrección de conteo",
         { uid: user.id, name: user.name },
-        // Una entrada es mercancía que llegó; la salida manual es corrección
-        // de conteo (la merma tiene su propia captura al cerrar el turno).
-        direction === "OUT" ? "ADJUSTMENT" : "PURCHASE",
+        moveMode === "BUY" ? "PURCHASE" : "ADJUSTMENT",
       );
-      form.reset();
+      setMoveQty("");
       onMessage(
-        direction === "OUT"
-          ? `Se restaron ${amount} ${supply?.unit ?? ""} de ${supply?.name ?? "el insumo"}.`
-          : `Entraron ${amount} ${supply?.unit ?? ""} de ${supply?.name ?? "el insumo"}.`,
+        moveMode === "BUY"
+          ? `Entraron ${moveDelta} ${moveTarget.unit} de ${moveTarget.name}.`
+          : `${moveTarget.name} quedó en ${moveQty} ${moveTarget.unit}.`,
       );
     } catch (reason) {
-      onError(errorMessage(reason, "No se pudo registrar el movimiento"));
+      onError(errorMessage(reason, "No se pudo guardar"));
     } finally {
       setBusy(false);
     }
@@ -426,11 +439,14 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                 onChange={(event) => {
                   const next = event.target.value;
                   setNewUnit(next);
-                  // Al cambiar de familia (de líquido a sólido), la unidad del
-                  // paquete deja de tener sentido: se reinicia a la mayor.
+                  // Al cambiar de familia (de líquido a sólido), las unidades
+                  // del paquete y de la porción dejan de tener sentido.
                   const options = packUnitsFor(next);
                   if (!options.some((option) => option.value === newPackUnit)) {
                     setNewPackUnit(options[options.length - 1]?.value ?? next);
+                  }
+                  if (!options.some((option) => option.value === linkUnit)) {
+                    setLinkUnit(next);
                   }
                 }}
                 required
@@ -603,19 +619,30 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                   )}
 
                   <label>¿Cuánto lleva cada bebida?</label>
-                  <div className="supply-inline">
+                  <div className="supply-portion">
                     <input
                       type="number"
                       min="0.01"
                       step="0.01"
                       value={linkQty}
                       onChange={(event) => setLinkQty(event.target.value)}
-                      placeholder="250"
+                      placeholder="30"
                     />
+                    <select value={linkUnit} onChange={(event) => setLinkUnit(event.target.value)}>
+                      {packUnitsFor(newUnit).map((unit) => (
+                        <option value={unit.value} key={unit.value}>
+                          {unit.value}
+                        </option>
+                      ))}
+                    </select>
                     <span className="supply-suffix">
-                      {newUnit}
-                      {Number(linkQty) > 0 && newUnitCost > 0 && (
-                        <> · {unitMoney.format(Number(linkQty) * newUnitCost)} por bebida</>
+                      {linkQtyInUnits > 0 && newUnitCost > 0 && (
+                        <>
+                          {linkUnit !== newUnit && (
+                            <>= {Math.round(linkQtyInUnits * 1000) / 1000} {newUnit} · </>
+                          )}
+                          {unitMoney.format(linkQtyInUnits * newUnitCost)} por bebida
+                        </>
                       )}
                     </span>
                   </div>
@@ -634,45 +661,96 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
           )}
 
           <form className="reference-card compact-form" onSubmit={move}>
-            <h2>Llegó mercancía</h2>
+            <h2>Actualizar existencia</h2>
             <p>
-              Úsalo cada vez que compres. Lo que se vende se descuenta solo, y lo que se derrama se
-              anota al cerrar el turno — aquí no hay que registrar nada de eso.
+              Sólo para cuando vuelves a comprar o cuando el conteo no cuadra. Las ventas se
+              descuentan solas y la merma se anota al cerrar el turno.
             </p>
-            <select name="supplyId" required defaultValue="">
+
+            <div className="inventory-tabs move-tabs">
+              <button
+                type="button"
+                className={moveMode === "BUY" ? "active" : ""}
+                onClick={() => {
+                  setMoveMode("BUY");
+                  setMoveQty("");
+                }}
+              >
+                Volví a comprar
+              </button>
+              <button
+                type="button"
+                className={moveMode === "COUNT" ? "active" : ""}
+                onClick={() => {
+                  setMoveMode("COUNT");
+                  setMoveQty("");
+                }}
+              >
+                Corregir el conteo
+              </button>
+            </div>
+
+            <select
+              value={moveSupplyId}
+              onChange={(event) => {
+                setMoveSupplyId(event.target.value);
+                setMoveQty("");
+              }}
+              required
+            >
               <option value="" disabled>
-                ¿Qué compraste?
+                ¿De qué insumo?
               </option>
               {supplies.map((supply) => (
                 <option value={supply.id} key={supply.id}>
-                  {supply.name} · te quedan {supply.stock} {supply.unit}
+                  {supply.name} · hay {supply.stock} {supply.unit}
                 </option>
               ))}
             </select>
+
+            <label>
+              {moveMode === "BUY"
+                ? `¿Cuántos ${moveTarget?.packLabel ?? "paquete"}s llegaron?`
+                : "¿Cuánto hay realmente?"}
+            </label>
             <div className="supply-inline">
               <input
-                name="quantity"
                 type="number"
-                min="0.01"
+                min="0"
                 step="0.01"
-                placeholder="¿Cuántos?"
+                value={moveQty}
+                onChange={(event) => setMoveQty(event.target.value)}
+                placeholder={moveMode === "BUY" ? "5" : String(moveTarget?.stock ?? 0)}
                 required
               />
-              <select name="mode" defaultValue="PACK">
-                <option value="PACK">paquetes completos</option>
-                <option value="UNIT">sueltos (ml, g, pz)</option>
-              </select>
+              <span className="supply-suffix">
+                {moveMode === "BUY"
+                  ? moveTarget
+                    ? `${moveTarget.packLabel}s de ${moveTarget.packSize} ${moveTarget.unit}`
+                    : ""
+                  : (moveTarget?.unit ?? "")}
+              </span>
             </div>
-            <select name="direction" defaultValue="IN" required>
-              <option value="IN">Los compré (súmalos)</option>
-              <option value="OUT">Me sobran menos de los que dice (réstalos)</option>
-            </select>
-            <input
-              name="reason"
-              placeholder="Nota: compra de la semana, conteo del lunes…"
-              required
-              minLength={4}
-            />
+
+            {moveTarget && moveQty !== "" && (
+              <div className={`notice ${moveDelta === 0 ? "" : "success"}`}>
+                {moveMode === "BUY" ? (
+                  <>
+                    Entran <strong>{moveDelta} {moveTarget.unit}</strong> y quedas con{" "}
+                    <strong>{Math.round((moveTarget.stock + moveDelta) * 100) / 100} {moveTarget.unit}</strong>.
+                  </>
+                ) : moveDelta === 0 ? (
+                  <>Es el mismo número que ya estaba registrado.</>
+                ) : (
+                  <>
+                    El sistema decía {moveTarget.stock} {moveTarget.unit}, así que se{" "}
+                    {moveDelta > 0 ? "suman" : "restan"}{" "}
+                    <strong>{Math.abs(moveDelta)} {moveTarget.unit}</strong>.
+                  </>
+                )}
+              </div>
+            )}
+
             <button className="reference-primary" disabled={busy || !supplies.length}>
               Guardar
             </button>
