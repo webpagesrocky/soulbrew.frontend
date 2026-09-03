@@ -728,7 +728,7 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .inventory-metrics { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
 .inventory-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 18px; align-items: start; margin-bottom: 20px; }
 .stock-head { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(60px, 1fr)); }
-.supply-head { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(58px, 1fr)) auto; }
+.supply-head { grid-template-columns: minmax(0, 1.9fr) minmax(78px, 1.1fr) minmax(64px, .9fr) minmax(70px, 1fr) auto; }
 .forecast-head { grid-template-columns: minmax(0, 2fr) repeat(6, minmax(52px, 1fr)); }
 .forecast-flag { color: #b1492f; font-weight: 700; }
 .supply-off { color: #b2452a; font-size: 10px; }

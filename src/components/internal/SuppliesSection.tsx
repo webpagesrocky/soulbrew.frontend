@@ -10,7 +10,7 @@ import {
   subscribeSupplyMovements,
   updateSupply,
 } from "../../api/collections";
-import { unitCost } from "../../api/costing";
+import { effectiveRecipe, unitCost } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
 import { moveSupply } from "../../api/transactions";
 import type { Category, Product, Supply, SupplyMovement, User } from "../../types";
@@ -235,13 +235,60 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
     [from, onError],
   );
 
-  const totals = useMemo(
-    () => ({
+  /**
+   * Lo que cada insumo todavía da de sí: cuántas bebidas más salen con lo que
+   * queda y cuánto cuesta cada una.
+   *
+   * La porción sale de las recetas que de verdad lo usan. Si varias bebidas
+   * llevan cantidades distintas se promedia, porque no hay forma de saber cuál
+   * se venderá primero — por eso el número se muestra como aproximado.
+   */
+  const yields = useMemo(() => {
+    const portions = new Map<string, number[]>();
+    for (const product of products) {
+      if (!product.active) continue;
+      for (const ingredient of effectiveRecipe(product, categories)) {
+        const list = portions.get(ingredient.supplyId) ?? [];
+        list.push(ingredient.quantity);
+        portions.set(ingredient.supplyId, list);
+      }
+    }
+
+    return new Map(
+      supplies.map((supply) => {
+        const list = portions.get(supply.id) ?? [];
+        const portion = list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0;
+        return [
+          supply.id,
+          {
+            portion,
+            drinks: portion > 0 ? Math.floor(supply.stock / portion) : null,
+            costPerDrink: portion * unitCost(supply),
+            packs: supply.packSize > 0 ? supply.stock / supply.packSize : null,
+            usedBy: list.length,
+          },
+        ];
+      }),
+    );
+  }, [supplies, products, categories]);
+
+  const totals = useMemo(() => {
+    const empty = supplies.filter((item) => item.active && item.stock <= 0);
+    const low = supplies.filter(
+      (item) =>
+        item.active &&
+        item.stock > 0 &&
+        // Se avisa por lo que se agote primero: el mínimo que se fijó a mano, o
+        // que ya no alcance ni para diez bebidas más.
+        ((item.minStock > 0 && item.stock <= item.minStock) ||
+          (yields.get(item.id)?.drinks ?? Infinity) <= 10),
+    );
+    return {
       value: supplies.reduce((sum, item) => sum + item.stock * unitCost(item), 0),
-      low: supplies.filter((item) => item.minStock > 0 && item.stock <= item.minStock),
-    }),
-    [supplies],
-  );
+      empty,
+      low,
+    };
+  }, [supplies, yields]);
 
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -416,8 +463,8 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
         <article className="metric-card">
           <div className="metric-icon amber"><Icon name="clock" size={22} /></div>
           <div>
-            <span>Por acabarse</span>
-            <strong>{totals.low.length}</strong>
+            <span>Se acaban</span>
+            <strong>{totals.empty.length + totals.low.length}</strong>
           </div>
         </article>
         <article className="metric-card">
@@ -429,9 +476,26 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
         </article>
       </div>
 
+      {totals.empty.length > 0 && (
+        <div className="notice error">
+          <strong>Se acabó:</strong>{" "}
+          {totals.empty.map((item) => item.name).join(", ")}. Compra y regístralo en "Actualizar
+          existencia" para que las cuentas vuelvan a cuadrar.
+        </div>
+      )}
+
       {totals.low.length > 0 && (
         <div className="notice error">
-          Por acabarse: {totals.low.map((item) => `${item.name} (${item.stock} ${item.unit})`).join(", ")}.
+          <strong>Está por acabarse:</strong>{" "}
+          {totals.low
+            .map((item) => {
+              const drinks = yields.get(item.id)?.drinks;
+              return drinks !== null && drinks !== undefined
+                ? `${item.name} (para ${drinks} bebidas más)`
+                : `${item.name} (${num.format(item.stock)} ${item.unit})`;
+            })
+            .join(", ")}
+          .
         </div>
       )}
 
@@ -444,36 +508,43 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
           <div className="report-table">
             <div className="report-head supply-head">
               <span>Insumo</span>
-              <span>Existencia</span>
-              <span>Lo que pagas</span>
-              <span>Valor</span>
+              <span>Te queda</span>
+              <span>Alcanza para</span>
+              <span>Por bebida</span>
               <span />
             </div>
-            {supplies.map((supply) => (
+            {supplies.map((supply) => {
+              const info = yields.get(supply.id);
+              const scarce = supply.stock <= 0 || (info?.drinks ?? Infinity) <= 10;
+              return (
               <div className="report-row supply-head" key={supply.id}>
                 <span>
                   {supply.name}
                   {supply.packSize > 0 && (
                     <small className="supply-pack-note">
-                      {" "}· {supply.packLabel} de {supply.packSize} {supply.unit} a{" "}
+                      {" "}· {supply.packLabel} de {num.format(supply.packSize)} {supply.unit} a{" "}
                       {money.format(supply.packCost)}
                     </small>
                   )}
                   {!supply.active && <small className="supply-off"> · inactivo</small>}
                 </span>
-                <strong
-                  className={
-                    supply.minStock > 0 && supply.stock <= supply.minStock ? "stock-zero" : ""
-                  }
-                >
-                  {supply.stock} {supply.unit}
+                <strong className={scarce ? "stock-zero" : ""}>
+                  {num.format(supply.stock)} {supply.unit}
+                  {info?.packs != null && info.packs > 0 && (
+                    <small className="supply-pack-note">
+                      {" "}({num.format(info.packs)} {supply.packLabel}
+                      {info.packs === 1 ? "" : "s"})
+                    </small>
+                  )}
                 </strong>
+                <span className={scarce ? "stock-zero" : ""}>
+                  {info?.drinks != null ? `~${info.drinks} bebidas` : "sin receta"}
+                </span>
                 <span>
-                  {supply.packSize > 0
-                    ? `${money.format(supply.packCost)} el ${supply.packLabel}`
+                  {info && info.costPerDrink > 0
+                    ? `${pesos.format(info.costPerDrink)} · ${num.format(info.portion)} ${supply.unit}`
                     : "—"}
                 </span>
-                <span>{money.format(supply.stock * unitCost(supply))}</span>
                 {canManage ? (
                   <button className="product-edit" onClick={() => setEditing(supply)}>
                     Editar
@@ -482,7 +553,8 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                   <span />
                 )}
               </div>
-            ))}
+              );
+            })}
             {!supplies.length && (
               <p className="reference-empty">
                 Aún no hay insumos. Agrega leche, vasos o lo que uses en barra.
@@ -605,12 +677,7 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                   <br />
                   Abajo, al marcar las bebidas, te digo cuánto cuesta cada una.
                 </div>
-              ) : (
-                <small className="editor-note">
-                  Ejemplo real: leche que mides con báscula en <strong>g</strong>, comprada en{" "}
-                  <strong>paquetes de 12 piezas de 1 L a $282</strong>.
-                </small>
-              )}
+              ) : null}
               <label>¿Cuánto tienes ahora?</label>
               <div className="supply-inline">
                 <input
