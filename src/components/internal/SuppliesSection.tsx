@@ -37,32 +37,24 @@ const UNITS = [
 const PACK_LABELS = ["paquete", "caja", "bolsa", "galón", "bote", "pieza"];
 
 /**
- * Equivalencia de cada unidad con la base de su familia (ml, g, pz).
+ * Equivalencia de cada unidad con una base común, para que el paquete se
+ * capture como se compra y la receta como se mide: "paquetes de 1 L" y "cada
+ * bebida lleva 250 g" acaban siendo el mismo insumo.
  *
- * Sirve para que el paquete se capture como se compra y el consumo como se
- * usa: "viene en paquetes de 1 L" y "cada bebida lleva 30 ml" son la misma
- * leche, y nadie debería tener que escribir 1000 para decir un litro.
+ * Peso y volumen se tratan como lo mismo: 1 L = 1000 g, como el agua. En
+ * rigor no es exacto (un litro de leche pesa ~1030 g, uno de jarabe ~1300),
+ * pero preguntarle la densidad a quien está dando de alta la leche cuesta más
+ * de lo que vale ese 3%. Quien quiera el número fino captura el paquete
+ * directamente en la unidad que mide, y entonces no se convierte nada.
  */
 const CONVERSIONS: Record<string, { base: string; factor: number }> = {
-  ml: { base: "ml", factor: 1 },
-  L: { base: "ml", factor: 1000 },
-  g: { base: "g", factor: 1 },
-  kg: { base: "g", factor: 1000 },
-  oz: { base: "g", factor: 28.3495 },
+  ml: { base: "medida", factor: 1 },
+  L: { base: "medida", factor: 1000 },
+  g: { base: "medida", factor: 1 },
+  kg: { base: "medida", factor: 1000 },
+  oz: { base: "medida", factor: 28.3495 },
   pz: { base: "pz", factor: 1 },
 };
-
-/**
- * Cuánto pesa un litro de lo más común en barra. Sirve de atajo para no
- * obligar a nadie a buscar la densidad ni a pesar cada cosa: se toca la que
- * corresponde y ya, o se corrige a mano con la báscula.
- */
-const DENSITIES = [
-  { label: "Agua / té", gramsPerLitre: 1000 },
-  { label: "Leche", gramsPerLitre: 1030 },
-  { label: "Jarabe", gramsPerLitre: 1300 },
-  { label: "Aceite", gramsPerLitre: 920 },
-];
 
 /** Unidades en las que se puede vender un insumo que se usa en `unit`. */
 function packUnitsFor(unit: string) {
@@ -78,25 +70,6 @@ function convert(amount: number, from: string, to: string): number {
   return (amount * a.factor) / b.factor;
 }
 
-/**
- * Cuánto vale 1 `from` expresado en `to` cuando hay que cruzar de volumen a
- * peso, para un líquido que pesa `gramsPerLitre` por litro. Devuelve 0 si el
- * cruce no aplica (por ejemplo, contar piezas no es ni peso ni volumen).
- */
-function crossEquivalence(gramsPerLitre: number, from: string, to: string): number {
-  const a = CONVERSIONS[from];
-  const b = CONVERSIONS[to];
-  if (!a || !b || !gramsPerLitre) return 0;
-
-  if (a.base === "ml" && b.base === "g") {
-    // 1 `from` son estos litros, que pesan esto, expresado en `to`.
-    return ((a.factor / 1000) * gramsPerLitre) / b.factor;
-  }
-  if (a.base === "g" && b.base === "ml") {
-    return ((a.factor / gramsPerLitre) * 1000) / b.factor;
-  }
-  return 0;
-}
 
 interface Props {
   user: User;
@@ -152,28 +125,13 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
   const [newPackUnit, setNewPackUnit] = useState("L");
   const [newPackCost, setNewPackCost] = useState("");
   const [newPackLabel, setNewPackLabel] = useState("paquete");
-  // Prellenada con la leche, que es el caso diario de una cafetería. Pasar de
-  // volumen a peso no tiene una conversión fija —depende de qué líquido sea—,
-  // así que se arranca con un valor razonable en vez de dejarlo en blanco.
-  const [newEquivalence, setNewEquivalence] = useState("1030");
   const [initialPacks, setInitialPacks] = useState("");
 
   // Un paquete puede traer varias piezas ("1 paquete de 12 piezas de 1 L"), así
   // que primero se saca cuánto trae en total en la unidad en que se compra.
   const packTotalBought = (Number(newPackPieces) || 0) * (Number(newPackSize) || 0);
 
-  // Comprar en litros y medir en gramos es normal (la báscula pesa, el
-  // proveedor vende por litro), pero pasar de volumen a peso necesita saber
-  // cuánto pesa ese líquido en concreto: no es lo mismo agua que jarabe.
-  const needsEquivalence =
-    CONVERSIONS[newPackUnit]?.base !== CONVERSIONS[newUnit]?.base;
-
-  const equivalenceUsed = Number(newEquivalence) || 1000;
-
-  const packSizeInUnits = needsEquivalence
-    ? packTotalBought * equivalenceUsed
-    : convert(packTotalBought, newPackUnit, newUnit);
-
+  const packSizeInUnits = convert(packTotalBought, newPackUnit, newUnit);
   const newUnitCost = packSizeInUnits > 0 ? (Number(newPackCost) || 0) / packSizeInUnits : 0;
 
   // Lo mismo para la porción de la receta: se escribe como se dice ("30 ml",
@@ -225,7 +183,6 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
     setNewPackUnit("L");
     setNewPackCost("");
     setNewPackLabel("paquete");
-    setNewEquivalence("1030");
     setInitialPacks("");
   }
 
@@ -535,16 +492,11 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                 onChange={(event) => {
                   const next = event.target.value;
                   setNewUnit(next);
-                  // La unidad de compra sí puede ser de otra familia (litros
-                  // contra gramos) y se resuelve con la equivalencia, pero la
-                  // porción de la receta se mide con lo mismo que la existencia.
+                  // Piezas no se convierten a nada: si se cambia entre contar
+                  // piezas y medir, la porción vuelve a la unidad del insumo.
                   if (!packUnitsFor(next).some((option) => option.value === linkUnit)) {
                     setLinkUnit(next);
                   }
-                  // La equivalencia guardada era en la unidad anterior, así que
-                  // se recalcula sobre la leche, que es el caso de todos los días.
-                  const fresh = crossEquivalence(1030, newPackUnit, next);
-                  setNewEquivalence(fresh ? String(Math.round(fresh * 1000) / 1000) : "");
                 }}
                 required
               >
@@ -556,7 +508,8 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
               </select>
 
               <label>Cómo lo compras</label>
-              <div className="supply-buy">
+              <div className="buy-row">
+                <span>Le llamas</span>
                 <select value={newPackLabel} onChange={(event) => setNewPackLabel(event.target.value)}>
                   {PACK_LABELS.map((label) => (
                     <option value={label} key={label}>
@@ -564,115 +517,69 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                     </option>
                   ))}
                 </select>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={newPackPieces}
-                  onChange={(event) => setNewPackPieces(event.target.value)}
-                  placeholder="trae… 12"
-                  required
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={newPackSize}
-                  onChange={(event) => setNewPackSize(event.target.value)}
-                  placeholder="de… 1"
-                  required
-                />
-                <select
-                  value={newPackUnit}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setNewPackUnit(next);
-                    const fresh = crossEquivalence(1030, next, newUnit);
-                    setNewEquivalence(fresh ? String(Math.round(fresh * 1000) / 1000) : "");
-                  }}
-                >
-                  {UNITS.map((unit) => (
-                    <option value={unit.value} key={unit.value}>
-                      {unit.value}
-                    </option>
-                  ))}
-                </select>
               </div>
-              <small className="editor-note">
-                Un <strong>{newPackLabel}</strong> trae <strong>{newPackPieces || "?"}</strong>{" "}
-                piezas de <strong>{newPackSize || "?"} {newPackUnit}</strong> cada una. Si viene
-                suelto, deja el 1.
-              </small>
-
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={newPackCost}
-                onChange={(event) => setNewPackCost(event.target.value)}
-                placeholder={`¿Cuánto cuesta un ${newPackLabel}? $`}
-                required
-              />
-
-              {needsEquivalence && (
-                <>
-                  <label>
-                    ¿Cuánto pesa 1 {newPackUnit} de esto?
-                  </label>
-                  <div className="supply-inline">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={newEquivalence}
-                      onChange={(event) => setNewEquivalence(event.target.value)}
-                      required
-                    />
-                    <span className="supply-suffix">{newUnit}</span>
-                  </div>
-                  <div className="density-picks">
-                    {DENSITIES.map((item) => {
-                      const raw = crossEquivalence(item.gramsPerLitre, newPackUnit, newUnit);
-                      if (!raw) return null;
-                      const value = String(Math.round(raw * 1000) / 1000);
-                      return (
-                        <button
-                          type="button"
-                          key={item.label}
-                          className={newEquivalence === value ? "active" : ""}
-                          onClick={() => setNewEquivalence(value)}
-                        >
-                          {item.label} · {num.format(Number(value))} {newUnit}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <small className="editor-note">
-                    Lo compras por {newPackUnit} y lo mides en {newUnit}. Pasar de volumen a peso no
-                    tiene un número fijo —depende del líquido—, así que toca uno de arriba o pon 1{" "}
-                    {newPackUnit} en tu báscula si lo quieres exacto.
-                  </small>
-                </>
-              )}
+              <div className="buy-row">
+                <span>Cada {newPackLabel} trae</span>
+                <div className="buy-field">
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={newPackPieces}
+                    onChange={(event) => setNewPackPieces(event.target.value)}
+                    required
+                  />
+                  <em>piezas</em>
+                </div>
+              </div>
+              <div className="buy-row">
+                <span>Cada pieza tiene</span>
+                <div className="buy-field">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newPackSize}
+                    onChange={(event) => setNewPackSize(event.target.value)}
+                    required
+                  />
+                  <select value={newPackUnit} onChange={(event) => setNewPackUnit(event.target.value)}>
+                    {UNITS.map((unit) => (
+                      <option value={unit.value} key={unit.value}>
+                        {unit.value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="buy-row">
+                <span>El {newPackLabel} cuesta</span>
+                <div className="buy-field">
+                  <em>$</em>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newPackCost}
+                    onChange={(event) => setNewPackCost(event.target.value)}
+                    required
+                  />
+                </div>
+              </div>
 
               {newUnitCost > 0 ? (
                 <div className="notice success">
-                  Un {newPackLabel} rinde{" "}
+                  {newPackPieces} piezas × {newPackSize} {newPackUnit} ={" "}
                   <strong>
                     {num.format(packSizeInUnits)} {newUnit}
-                  </strong>
-                  {needsEquivalence && (
-                    <>
-                      {" "}({num.format(packTotalBought)} {newPackUnit} × {num.format(equivalenceUsed)}{" "}
-                      {newUnit}
-                      {!newEquivalence && ", el peso del agua"})
-                    </>
-                  )}
-                  . Abajo, al marcar las bebidas, te digo cuánto cuesta cada una.
+                  </strong>{" "}
+                  por {money.format(Number(newPackCost))}.
+                  <br />
+                  Abajo, al marcar las bebidas, te digo cuánto cuesta cada una.
                 </div>
               ) : (
                 <small className="editor-note">
-                  Ejemplo real: leche que mides con báscula en <strong>g</strong>, y compras en{" "}
+                  Ejemplo real: leche que mides con báscula en <strong>g</strong>, comprada en{" "}
                   <strong>paquetes de 12 piezas de 1 L a $282</strong>.
                 </small>
               )}

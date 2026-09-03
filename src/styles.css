@@ -847,11 +847,15 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .link-product input:disabled + span { color: #a99584; }
 .link-count { margin: 6px 0 10px; color: #6b4226; font-size: 12px; font-weight: 700; }
 
-/* Atajos de peso por litro: agua, leche, jarabe, aceite. */
-.density-picks { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 9px; }
-.density-picks button { border: 1px solid #ddcabb; border-radius: 99px; padding: 5px 10px; background: #fff; font-size: 11px; font-weight: 650; color: #67442f; }
-.density-picks button:hover { border-color: var(--ref-brown); background: #f8f1eb; }
-.density-picks button.active { border-color: var(--ref-brown); background: var(--ref-brown); color: #fff; }
+/* Alta de insumo: una frase por renglón ("Cada paquete trae [12] piezas"),
+   para que no queden tres casillas seguidas sin decir cuál es cuál. */
+.buy-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); align-items: center; gap: 8px; margin-bottom: 7px; }
+.buy-row > span { color: #6b4226; font-size: 12px; font-weight: 650; }
+.buy-row select, .buy-row input { margin: 0; }
+.buy-field { display: flex; align-items: center; gap: 6px; }
+.buy-field input { min-width: 0; }
+.buy-field select { flex: 0 0 58px; }
+.buy-field em { flex: 0 0 auto; color: #9b765c; font-size: 11.5px; font-style: normal; }
 /* Sufijo con la unidad ("ml", "3 paquetes = 1800 ml") junto a una cantidad. */
 .supply-suffix { align-self: center; color: #9b765c; font-size: 11.5px; }
 .pill-on { background: #e6efdd; color: #4c6b39; }
