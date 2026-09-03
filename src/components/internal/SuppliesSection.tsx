@@ -24,8 +24,19 @@ const unitMoney = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 4,
 });
 
-/** Unidades en las que se *usa* el insumo, que es como se lleva la existencia. */
-const UNITS = ["ml", "g", "pz", "L", "kg"];
+/**
+ * Unidades en las que se *usa* el insumo, que es como se lleva la existencia y
+ * como se escriben las cantidades de la receta. Son las que tienen sentido
+ * medir en barra: líquidos, sólidos y piezas contables.
+ */
+const UNITS = [
+  { value: "ml", label: "ml (mililitros)" },
+  { value: "L", label: "L (litros)" },
+  { value: "g", label: "g (gramos)" },
+  { value: "kg", label: "kg (kilos)" },
+  { value: "oz", label: "oz (onzas)" },
+  { value: "pz", label: "pz (piezas)" },
+];
 
 const PACK_LABELS = ["paquete", "caja", "bolsa", "galón", "bote", "pieza"];
 
@@ -57,6 +68,17 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
   const [linkIds, setLinkIds] = useState<string[]>([]);
   const [linkQty, setLinkQty] = useState("");
 
+  // Campos controlados del alta: hacen falta para ir mostrando la unidad y el
+  // costo por unidad mientras se escribe, en vez de hasta después de guardar.
+  const [newUnit, setNewUnit] = useState("ml");
+  const [newPackSize, setNewPackSize] = useState("");
+  const [newPackCost, setNewPackCost] = useState("");
+  const [newPackLabel, setNewPackLabel] = useState("paquete");
+  const [initialPacks, setInitialPacks] = useState("");
+
+  const newUnitCost =
+    Number(newPackSize) > 0 ? Number(newPackCost) / Number(newPackSize) : 0;
+
   const canManage = user.role === "ADMIN" || user.role === "SUPERVISOR";
 
   useEffect(
@@ -80,12 +102,20 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
     (product) => product.category === linkCategory && product.active,
   );
 
-  function resetLink() {
+  function resetForm() {
     setLinkCategory("");
     setLinkAll(false);
     setLinkIds([]);
     setLinkQty("");
+    setNewUnit("ml");
+    setNewPackSize("");
+    setNewPackCost("");
+    setNewPackLabel("paquete");
+    setInitialPacks("");
   }
+
+  const allLinked =
+    linkableProducts.length > 0 && linkIds.length === linkableProducts.length;
 
   useEffect(
     () =>
@@ -120,15 +150,25 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
     setBusy(true);
     try {
       const name = String(data.get("name")).trim();
-      const unit = String(data.get("unit"));
+      const unit = newUnit;
+      const packSize = Number(newPackSize) || 0;
       const supplyId = await createSupply({
         name,
         unit,
         minStock: Number(data.get("minStock") ?? 0) || 0,
-        packLabel: String(data.get("packLabel") ?? "paquete"),
-        packSize: Number(data.get("packSize") ?? 0) || 0,
-        packCost: Number(data.get("packCost") ?? 0) || 0,
+        packLabel: newPackLabel,
+        packSize,
+        packCost: Number(newPackCost) || 0,
       });
+
+      // Existencia inicial en la misma pantalla: nace en cero y aquí mismo se
+      // le registra lo que ya hay, para no obligar a un segundo paso aparte.
+      const packs = Number(initialPacks) || 0;
+      let stockNote = "";
+      if (packs > 0 && packSize > 0) {
+        await moveSupply(supplyId, packs * packSize, "Existencia inicial", { uid: user.id, name: user.name }, "PURCHASE");
+        stockNote = ` Entraron ${packs * packSize} ${unit}.`;
+      }
 
       // Segundo paso opcional: meterlo de una vez en las recetas que lo usan.
       const quantity = Number(linkQty);
@@ -146,10 +186,8 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
       }
 
       form.reset();
-      resetLink();
-      onMessage(
-        `"${name}" agregado. Registra una entrada para darle existencias.${linkNote}`,
-      );
+      resetForm();
+      onMessage(`"${name}" agregado.${stockNote}${linkNote}`);
     } catch (reason) {
       onError(errorMessage(reason, "No se pudo agregar el insumo"));
     } finally {
@@ -185,7 +223,9 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
       );
       form.reset();
       onMessage(
-        `${direction === "OUT" ? "Salida" : "Entrada"} registrada: ${amount} ${supply?.unit ?? ""}.`,
+        direction === "OUT"
+          ? `Se restaron ${amount} ${supply?.unit ?? ""} de ${supply?.name ?? "el insumo"}.`
+          : `Entraron ${amount} ${supply?.unit ?? ""} de ${supply?.name ?? "el insumo"}.`,
       );
     } catch (reason) {
       onError(errorMessage(reason, "No se pudo registrar el movimiento"));
@@ -347,38 +387,80 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
               <input name="name" placeholder="Nombre del insumo" required minLength={2} maxLength={80} />
 
               <label>Se usa y se mide en</label>
-              <select name="unit" defaultValue="ml" required>
+              <select value={newUnit} onChange={(event) => setNewUnit(event.target.value)} required>
                 {UNITS.map((unit) => (
-                  <option value={unit} key={unit}>
-                    {unit}
+                  <option value={unit.value} key={unit.value}>
+                    {unit.label}
                   </option>
                 ))}
               </select>
 
               <label>Cómo lo compras</label>
               <div className="supply-pack">
-                <select name="packLabel" defaultValue="paquete">
+                <select value={newPackLabel} onChange={(event) => setNewPackLabel(event.target.value)}>
                   {PACK_LABELS.map((label) => (
                     <option value={label} key={label}>
                       {label}
                     </option>
                   ))}
                 </select>
-                <input name="packSize" type="number" min="0" step="0.01" placeholder="de… (600)" required />
-                <input name="packCost" type="number" min="0" step="0.01" placeholder="cuesta $" required />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newPackSize}
+                  onChange={(event) => setNewPackSize(event.target.value)}
+                  placeholder={`de… ${newUnit}`}
+                  required
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newPackCost}
+                  onChange={(event) => setNewPackCost(event.target.value)}
+                  placeholder="cuesta $"
+                  required
+                />
               </div>
+
+              {newUnitCost > 0 && (
+                <div className="notice success">
+                  Cada {newUnit} te sale en <strong>{unitMoney.format(newUnitCost)}</strong>. Ese es
+                  el precio con el que se costean las recetas.
+                </div>
+              )}
               <small className="editor-note">
                 Ejemplo: leche que se usa en <strong>ml</strong>, viene en <strong>paquete</strong> de{" "}
                 <strong>600</strong> y cuesta <strong>$28</strong>. De ahí sale solo cuánto vale cada
                 ml, y con eso se costean las recetas.
               </small>
 
+              <label>¿Cuánto tienes ahora?</label>
+              <div className="supply-inline">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={initialPacks}
+                  onChange={(event) => setInitialPacks(event.target.value)}
+                  placeholder="0"
+                />
+                <span className="supply-suffix">
+                  {newPackLabel}
+                  {Number(initialPacks) === 1 ? "" : "s"}
+                  {Number(initialPacks) > 0 && Number(newPackSize) > 0 && (
+                    <> = {Number(initialPacks) * Number(newPackSize)} {newUnit}</>
+                  )}
+                </span>
+              </div>
+
               <input
                 name="minStock"
                 type="number"
                 min="0"
                 step="0.01"
-                placeholder="Avisar cuando baje de… (opcional)"
+                placeholder={`Avisar cuando baje de… ${newUnit} (opcional)`}
               />
 
               <label>¿Qué lo lleva? (opcional)</label>
@@ -414,6 +496,24 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
 
                   {!linkAll && (
                     <div className="link-products">
+                      {linkableProducts.length > 1 && (
+                        <label className="link-product link-all">
+                          <input
+                            type="checkbox"
+                            checked={allLinked}
+                            onChange={(event) =>
+                              setLinkIds(
+                                event.target.checked
+                                  ? linkableProducts.map((product) => product.id)
+                                  : [],
+                              )
+                            }
+                          />
+                          <span>
+                            <strong>Seleccionar todos</strong> ({linkableProducts.length})
+                          </span>
+                        </label>
+                      )}
                       {linkableProducts.map((product) => (
                         <label className="link-product" key={product.id}>
                           <input
@@ -436,14 +536,23 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                     </div>
                   )}
 
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={linkQty}
-                    onChange={(event) => setLinkQty(event.target.value)}
-                    placeholder="¿Cuánto lleva cada uno? (250)"
-                  />
+                  <label>¿Cuánto lleva cada bebida?</label>
+                  <div className="supply-inline">
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={linkQty}
+                      onChange={(event) => setLinkQty(event.target.value)}
+                      placeholder="250"
+                    />
+                    <span className="supply-suffix">
+                      {newUnit}
+                      {Number(linkQty) > 0 && newUnitCost > 0 && (
+                        <> · {unitMoney.format(Number(linkQty) * newUnitCost)} por bebida</>
+                      )}
+                    </span>
+                  </div>
                   <small className="editor-note">
                     {linkAll
                       ? "Se agrega a la receta de la categoría, así que lo heredan todos sus productos."
@@ -459,39 +568,47 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
           )}
 
           <form className="reference-card compact-form" onSubmit={move}>
-            <h2>Entrada o salida</h2>
-            <p>Mueve existencias y deja el motivo registrado.</p>
+            <h2>Llegó mercancía</h2>
+            <p>
+              Úsalo cada vez que compres. Lo que se vende se descuenta solo, y lo que se derrama se
+              anota al cerrar el turno — aquí no hay que registrar nada de eso.
+            </p>
             <select name="supplyId" required defaultValue="">
               <option value="" disabled>
-                Selecciona insumo…
+                ¿Qué compraste?
               </option>
               {supplies.map((supply) => (
                 <option value={supply.id} key={supply.id}>
-                  {supply.name} · {supply.stock} {supply.unit}
+                  {supply.name} · te quedan {supply.stock} {supply.unit}
                 </option>
               ))}
             </select>
             <div className="supply-inline">
-              <select name="direction" defaultValue="IN" required>
-                <option value="IN">Entrada (+)</option>
-                <option value="OUT">Salida (−)</option>
-              </select>
               <input
                 name="quantity"
                 type="number"
                 min="0.01"
                 step="0.01"
-                placeholder="Cantidad"
+                placeholder="¿Cuántos?"
                 required
               />
+              <select name="mode" defaultValue="PACK">
+                <option value="PACK">paquetes completos</option>
+                <option value="UNIT">sueltos (ml, g, pz)</option>
+              </select>
             </div>
-            <select name="mode" defaultValue="PACK">
-              <option value="PACK">Paquetes completos (lo que compras)</option>
-              <option value="UNIT">Unidades sueltas (ml, g, pz)</option>
+            <select name="direction" defaultValue="IN" required>
+              <option value="IN">Los compré (súmalos)</option>
+              <option value="OUT">Me sobran menos de los que dice (réstalos)</option>
             </select>
-            <input name="reason" placeholder="Motivo (compra, consumo, merma…)" required minLength={4} />
+            <input
+              name="reason"
+              placeholder="Nota: compra de la semana, conteo del lunes…"
+              required
+              minLength={4}
+            />
             <button className="reference-primary" disabled={busy || !supplies.length}>
-              Registrar movimiento
+              Guardar
             </button>
           </form>
         </div>
@@ -548,11 +665,13 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
             <label>Se usa y se mide en</label>
             <select name="unit" defaultValue={editing.unit} required>
               {UNITS.map((unit) => (
-                <option value={unit} key={unit}>
-                  {unit}
+                <option value={unit.value} key={unit.value}>
+                  {unit.label}
                 </option>
               ))}
-              {!UNITS.includes(editing.unit) && (
+              {/* Si el insumo trae una unidad que ya no está en la lista, se
+                  conserva para que guardar no se la cambie por accidente. */}
+              {!UNITS.some((unit) => unit.value === editing.unit) && (
                 <option value={editing.unit}>{editing.unit}</option>
               )}
             </select>
