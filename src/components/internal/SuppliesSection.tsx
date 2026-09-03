@@ -93,8 +93,10 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
   // Alta de insumo: a qué productos se le mete de una vez.
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [linkCategory, setLinkCategory] = useState("");
-  const [linkAll, setLinkAll] = useState(false);
+  // Un insumo suele cruzar categorías (la leche va en matcha, café y chai), así
+  // que se marcan todas a la vez: `linkCats` son las que lo llevan completas y
+  // `linkIds` las bebidas sueltas de las demás.
+  const [linkCats, setLinkCats] = useState<string[]>([]);
   const [linkIds, setLinkIds] = useState<string[]>([]);
   const [linkQty, setLinkQty] = useState("");
   const [linkUnit, setLinkUnit] = useState("ml");
@@ -150,13 +152,23 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
     [onError],
   );
 
-  const linkableProducts = products.filter(
-    (product) => product.category === linkCategory && product.active,
-  );
+  /** Bebidas activas agrupadas por categoría, para marcarlas todas de un tirón. */
+  const productsByCategory = categories
+    .map((category) => ({
+      category,
+      items: products.filter((product) => product.category === category.id && product.active),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  /** Una bebida cuenta como marcada si lo está ella o toda su categoría. */
+  function isLinked(product: Product) {
+    return linkCats.includes(product.category) || linkIds.includes(product.id);
+  }
+
+  const linkedCount = products.filter((product) => product.active && isLinked(product)).length;
 
   function resetForm() {
-    setLinkCategory("");
-    setLinkAll(false);
+    setLinkCats([]);
     setLinkIds([]);
     setLinkQty("");
     setNewUnit("ml");
@@ -167,8 +179,17 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
     setInitialPacks("");
   }
 
-  const allLinked =
-    linkableProducts.length > 0 && linkIds.length === linkableProducts.length;
+  function toggleCategory(id: string, checked: boolean) {
+    setLinkCats((current) =>
+      checked ? [...current, id] : current.filter((item) => item !== id),
+    );
+    // Al marcar la categoría completa sobran las marcas sueltas de sus bebidas.
+    if (checked) {
+      setLinkIds((current) =>
+        current.filter((productId) => products.find((p) => p.id === productId)?.category !== id),
+      );
+    }
+  }
 
   useEffect(
     () =>
@@ -226,16 +247,32 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
       // Segundo paso opcional: meterlo de una vez en las recetas que lo usan.
       const quantity = linkQtyInUnits;
       let linkNote = "";
-      if (linkCategory && quantity > 0) {
+      if (quantity > 0 && (linkCats.length || linkIds.length)) {
         const ingredient = { supplyId, supplyName: name, unit, quantity };
-        if (linkAll) {
-          await addIngredientToCategory(linkCategory, ingredient, categories);
-          const category = categories.find((item) => item.id === linkCategory);
-          linkNote = ` Se agregó a la receta de ${category?.name ?? linkCategory}, así que lo llevan todos sus productos.`;
-        } else if (linkIds.length) {
-          await addIngredientToProducts(linkIds, ingredient, products, categories);
-          linkNote = ` Se agregó a ${linkIds.length} ${linkIds.length === 1 ? "producto" : "productos"}.`;
+        const parts: string[] = [];
+
+        for (const categoryId of linkCats) {
+          await addIngredientToCategory(categoryId, ingredient, categories);
         }
+        if (linkCats.length) {
+          const names = linkCats
+            .map((id) => categories.find((item) => item.id === id)?.name ?? id)
+            .join(", ");
+          parts.push(`toda la categoría ${names}`);
+        }
+
+        // Una bebida marcada suelta dentro de una categoría ya marcada completa
+        // ya lo hereda: escribírselo aparte sería duplicar el ingrediente.
+        const individual = linkIds.filter((id) => {
+          const product = products.find((item) => item.id === id);
+          return product && !linkCats.includes(product.category);
+        });
+        if (individual.length) {
+          await addIngredientToProducts(individual, ingredient, products, categories);
+          parts.push(`${individual.length} ${individual.length === 1 ? "bebida" : "bebidas"} sueltas`);
+        }
+
+        if (parts.length) linkNote = ` Se agregó a ${parts.join(" y ")}.`;
       }
 
       form.reset();
@@ -540,67 +577,37 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
               />
 
               <label>¿Qué bebidas lo llevan? — arma la receta</label>
-              <select
-                value={linkCategory}
-                onChange={(event) => {
-                  setLinkCategory(event.target.value);
-                  setLinkIds([]);
-                  setLinkAll(false);
-                }}
-              >
-                <option value="">Elige una categoría…</option>
-                {categories.map((category) => (
-                  <option value={category.id} key={category.id}>
-                    {category.emoji} {category.name}
-                  </option>
-                ))}
-              </select>
-              {!linkCategory && (
-                <small className="editor-note">
-                  Elige una categoría y te aparecen sus bebidas para marcar cuáles lo llevan y
-                  cuánto lleva cada una. Puedes dejarlo para después y armarlo desde Menú.
-                </small>
-              )}
+              <small className="editor-note">
+                Marca en todas las categorías que quieras: un mismo insumo suele cruzarlas (la leche
+                va en matcha, café y chai). Puedes dejarlo para después y armarlo desde Menú.
+              </small>
 
-              {linkCategory && (
-                <>
-                  <label className="editor-check">
-                    <input
-                      type="checkbox"
-                      checked={linkAll}
-                      onChange={(event) => {
-                        setLinkAll(event.target.checked);
-                        if (event.target.checked) setLinkIds([]);
-                      }}
-                    />
-                    <span>Lo lleva toda la categoría</span>
-                  </label>
-
-                  {!linkAll && (
-                    <div className="link-products">
-                      {linkableProducts.length > 1 && (
-                        <label className="link-product link-all">
+              <div className="link-products">
+                {productsByCategory.map(({ category, items }) => {
+                  const whole = linkCats.includes(category.id);
+                  return (
+                    <div className="link-group" key={category.id}>
+                      <label className="link-product link-group-head">
+                        <input
+                          type="checkbox"
+                          checked={whole}
+                          onChange={(event) => toggleCategory(category.id, event.target.checked)}
+                        />
+                        <span>
+                          <strong>
+                            {category.emoji} {category.name}
+                          </strong>{" "}
+                          — toda la categoría ({items.length})
+                        </span>
+                      </label>
+                      {items.map((product) => (
+                        <label className="link-product link-child" key={product.id}>
                           <input
                             type="checkbox"
-                            checked={allLinked}
-                            onChange={(event) =>
-                              setLinkIds(
-                                event.target.checked
-                                  ? linkableProducts.map((product) => product.id)
-                                  : [],
-                              )
-                            }
-                          />
-                          <span>
-                            <strong>Seleccionar todos</strong> ({linkableProducts.length})
-                          </span>
-                        </label>
-                      )}
-                      {linkableProducts.map((product) => (
-                        <label className="link-product" key={product.id}>
-                          <input
-                            type="checkbox"
-                            checked={linkIds.includes(product.id)}
+                            checked={isLinked(product)}
+                            // Con la categoría completa marcada, sus bebidas ya
+                            // lo llevan: desmarcarlas una por una no aplicaría.
+                            disabled={whole}
                             onChange={(event) =>
                               setLinkIds((current) =>
                                 event.target.checked
@@ -612,11 +619,19 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                           <span>{product.name}</span>
                         </label>
                       ))}
-                      {!linkableProducts.length && (
-                        <p className="reference-empty">Esa categoría no tiene productos activos.</p>
-                      )}
                     </div>
-                  )}
+                  );
+                })}
+                {!productsByCategory.length && (
+                  <p className="reference-empty">Todavía no hay bebidas activas en el menú.</p>
+                )}
+              </div>
+
+              {linkedCount > 0 && (
+                <>
+                  <p className="link-count">
+                    {linkedCount} {linkedCount === 1 ? "bebida seleccionada" : "bebidas seleccionadas"}
+                  </p>
 
                   <label>¿Cuánto lleva cada bebida?</label>
                   <div className="supply-portion">
@@ -647,9 +662,8 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                     </span>
                   </div>
                   <small className="editor-note">
-                    {linkAll
-                      ? "Se agrega a la receta de la categoría, así que lo heredan todos sus productos."
-                      : "Se agrega solo a los productos marcados. Al que aún no tenga receta propia se le copia primero la de su categoría, para que no pierda lo que ya heredaba."}
+                    Esa cantidad se usa para todas las marcadas. Si alguna lleva una medida
+                    distinta, la ajustas después desde Menú → Receta de ese producto.
                   </small>
                 </>
               )}
