@@ -828,6 +828,9 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 /* Alta de insumo: presentación de compra (paquete · tamaño · precio). */
 .supply-pack { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .supply-pack > * { margin: 0; }
+/* "paquete · de 1 · L · cuesta $": el tamaño y su unidad van pegados. */
+.supply-buy { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) 62px minmax(0, 1fr); gap: 6px; margin-bottom: 9px; }
+.supply-buy > * { margin: 0; }
 .supply-pack-note { color: #9b765c; font-weight: 400; }
 
 /* Alta de insumo: a qué productos de la categoría se le mete de una vez. */

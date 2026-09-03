@@ -40,6 +40,36 @@ const UNITS = [
 
 const PACK_LABELS = ["paquete", "caja", "bolsa", "galón", "bote", "pieza"];
 
+/**
+ * Equivalencia de cada unidad con la base de su familia (ml, g, pz).
+ *
+ * Sirve para que el paquete se capture como se compra y el consumo como se
+ * usa: "viene en paquetes de 1 L" y "cada bebida lleva 30 ml" son la misma
+ * leche, y nadie debería tener que escribir 1000 para decir un litro.
+ */
+const CONVERSIONS: Record<string, { base: string; factor: number }> = {
+  ml: { base: "ml", factor: 1 },
+  L: { base: "ml", factor: 1000 },
+  g: { base: "g", factor: 1 },
+  kg: { base: "g", factor: 1000 },
+  oz: { base: "g", factor: 28.3495 },
+  pz: { base: "pz", factor: 1 },
+};
+
+/** Unidades en las que se puede vender un insumo que se usa en `unit`. */
+function packUnitsFor(unit: string) {
+  const base = CONVERSIONS[unit]?.base;
+  return UNITS.filter((option) => CONVERSIONS[option.value]?.base === base);
+}
+
+/** Convierte una cantidad de `from` a `to` dentro de la misma familia. */
+function convert(amount: number, from: string, to: string): number {
+  const a = CONVERSIONS[from];
+  const b = CONVERSIONS[to];
+  if (!a || !b || a.base !== b.base) return amount;
+  return (amount * a.factor) / b.factor;
+}
+
 interface Props {
   user: User;
   from: Date;
@@ -72,12 +102,15 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
   // costo por unidad mientras se escribe, en vez de hasta después de guardar.
   const [newUnit, setNewUnit] = useState("ml");
   const [newPackSize, setNewPackSize] = useState("");
+  const [newPackUnit, setNewPackUnit] = useState("L");
   const [newPackCost, setNewPackCost] = useState("");
   const [newPackLabel, setNewPackLabel] = useState("paquete");
   const [initialPacks, setInitialPacks] = useState("");
 
-  const newUnitCost =
-    Number(newPackSize) > 0 ? Number(newPackCost) / Number(newPackSize) : 0;
+  // El paquete se captura en la unidad en que se compra ("1 L") y se guarda en
+  // la unidad en que se usa ("1000 ml"), que es en la que vive la existencia.
+  const packSizeInUnits = convert(Number(newPackSize) || 0, newPackUnit, newUnit);
+  const newUnitCost = packSizeInUnits > 0 ? (Number(newPackCost) || 0) / packSizeInUnits : 0;
 
   const canManage = user.role === "ADMIN" || user.role === "SUPERVISOR";
 
@@ -109,6 +142,7 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
     setLinkQty("");
     setNewUnit("ml");
     setNewPackSize("");
+    setNewPackUnit("L");
     setNewPackCost("");
     setNewPackLabel("paquete");
     setInitialPacks("");
@@ -151,7 +185,7 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
     try {
       const name = String(data.get("name")).trim();
       const unit = newUnit;
-      const packSize = Number(newPackSize) || 0;
+      const packSize = packSizeInUnits;
       const supplyId = await createSupply({
         name,
         unit,
@@ -386,8 +420,21 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
               <p>Leche, vasos, jarabes… lo que se consume en barra.</p>
               <input name="name" placeholder="Nombre del insumo" required minLength={2} maxLength={80} />
 
-              <label>Se usa y se mide en</label>
-              <select value={newUnit} onChange={(event) => setNewUnit(event.target.value)} required>
+              <label>En la receta se mide en</label>
+              <select
+                value={newUnit}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setNewUnit(next);
+                  // Al cambiar de familia (de líquido a sólido), la unidad del
+                  // paquete deja de tener sentido: se reinicia a la mayor.
+                  const options = packUnitsFor(next);
+                  if (!options.some((option) => option.value === newPackUnit)) {
+                    setNewPackUnit(options[options.length - 1]?.value ?? next);
+                  }
+                }}
+                required
+              >
                 {UNITS.map((unit) => (
                   <option value={unit.value} key={unit.value}>
                     {unit.label}
@@ -396,7 +443,7 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
               </select>
 
               <label>Cómo lo compras</label>
-              <div className="supply-pack">
+              <div className="supply-buy">
                 <select value={newPackLabel} onChange={(event) => setNewPackLabel(event.target.value)}>
                   {PACK_LABELS.map((label) => (
                     <option value={label} key={label}>
@@ -410,9 +457,16 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                   step="0.01"
                   value={newPackSize}
                   onChange={(event) => setNewPackSize(event.target.value)}
-                  placeholder={`de… ${newUnit}`}
+                  placeholder="de…"
                   required
                 />
+                <select value={newPackUnit} onChange={(event) => setNewPackUnit(event.target.value)}>
+                  {packUnitsFor(newUnit).map((unit) => (
+                    <option value={unit.value} key={unit.value}>
+                      {unit.value}
+                    </option>
+                  ))}
+                </select>
                 <input
                   type="number"
                   min="0"
@@ -424,18 +478,22 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                 />
               </div>
 
-              {newUnitCost > 0 && (
+              {newUnitCost > 0 ? (
                 <div className="notice success">
-                  Cada {newUnit} te sale en <strong>{unitMoney.format(newUnitCost)}</strong>. Ese es
-                  el precio con el que se costean las recetas.
+                  Un {newPackLabel} de {newPackSize} {newPackUnit} son{" "}
+                  <strong>
+                    {Math.round(packSizeInUnits * 100) / 100} {newUnit}
+                  </strong>
+                  , así que cada {newUnit} te sale en{" "}
+                  <strong>{unitMoney.format(newUnitCost)}</strong>.
                 </div>
+              ) : (
+                <small className="editor-note">
+                  Ejemplo: leche que en la receta se mide en <strong>ml</strong>, y la compras en{" "}
+                  <strong>paquetes de 1 L</strong> a <strong>$28</strong>. El sistema saca solo
+                  cuánto vale cada ml.
+                </small>
               )}
-              <small className="editor-note">
-                Ejemplo: leche que se usa en <strong>ml</strong>, viene en <strong>paquete</strong> de{" "}
-                <strong>600</strong> y cuesta <strong>$28</strong>. De ahí sale solo cuánto vale cada
-                ml, y con eso se costean las recetas.
-              </small>
-
               <label>¿Cuánto tienes ahora?</label>
               <div className="supply-inline">
                 <input
@@ -449,8 +507,10 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                 <span className="supply-suffix">
                   {newPackLabel}
                   {Number(initialPacks) === 1 ? "" : "s"}
-                  {Number(initialPacks) > 0 && Number(newPackSize) > 0 && (
-                    <> = {Number(initialPacks) * Number(newPackSize)} {newUnit}</>
+                  {Number(initialPacks) > 0 && packSizeInUnits > 0 && (
+                    <>
+                      {" "}= {Math.round(Number(initialPacks) * packSizeInUnits * 100) / 100} {newUnit}
+                    </>
                   )}
                 </span>
               </div>
@@ -463,7 +523,7 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                 placeholder={`Avisar cuando baje de… ${newUnit} (opcional)`}
               />
 
-              <label>¿Qué lo lleva? (opcional)</label>
+              <label>¿Qué bebidas lo llevan? — arma la receta</label>
               <select
                 value={linkCategory}
                 onChange={(event) => {
@@ -472,13 +532,19 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                   setLinkAll(false);
                 }}
               >
-                <option value="">No asociarlo por ahora</option>
+                <option value="">Elige una categoría…</option>
                 {categories.map((category) => (
                   <option value={category.id} key={category.id}>
                     {category.emoji} {category.name}
                   </option>
                 ))}
               </select>
+              {!linkCategory && (
+                <small className="editor-note">
+                  Elige una categoría y te aparecen sus bebidas para marcar cuáles lo llevan y
+                  cuánto lleva cada una. Puedes dejarlo para después y armarlo desde Menú.
+                </small>
+              )}
 
               {linkCategory && (
                 <>
@@ -694,7 +760,7 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
                 min="0"
                 step="0.01"
                 defaultValue={editing.packSize || ""}
-                placeholder="de… (600)"
+                placeholder={`de… ${editing.unit}`}
               />
               <input
                 name="packCost"
@@ -706,9 +772,9 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
               />
             </div>
             <small className="editor-note">
-              Corrige aquí cuando suba el precio: todas las recetas que usan este insumo se
-              recostean solas. Ahorita cada {editing.unit} sale en{" "}
-              <strong>{unitMoney.format(unitCost(editing))}</strong>.
+              El tamaño va en {editing.unit}, la unidad en que se mide la receta. Corrige el precio
+              aquí cuando suba y todas las recetas que lo usan se recostean solas: ahorita cada{" "}
+              {editing.unit} sale en <strong>{unitMoney.format(unitCost(editing))}</strong>.
             </small>
 
             <label>Avisar cuando baje de</label>
