@@ -470,15 +470,6 @@ function GroupEditor({ group, categories, images, busy, onClose, onSave, onDelet
               </div>
               {draft.hasImages && (
               <div className="option-image">
-                <div className="option-photo">
-                  <span>Para cualquier categoría</span>
-                  <ImageField
-                    value={option.imageUrl}
-                    onChange={(value) => patchOption(option.id, { imageUrl: value })}
-                    onError={onError}
-                  />
-                </div>
-
                 {/* Una foto por categoría, porque el mismo lotus no se ve igual
                     sobre un matcha que sobre un latte. Se guardan al momento,
                     aparte del grupo: cada una pesa decenas de KB y juntas no
@@ -497,8 +488,7 @@ function GroupEditor({ group, categories, images, busy, onClose, onSave, onDelet
                 ))}
 
                 <small>
-                  Todas opcionales. Se usa la de la categoría si existe; si no, la general; y si no
-                  hay ninguna, se queda la foto del producto.
+                  Todas opcionales. Si la categoría no tiene foto, se queda la del producto.
                 </small>
               </div>
               )}
