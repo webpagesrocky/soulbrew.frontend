@@ -218,7 +218,10 @@ export function PublicView() {
         ) : (
           <img
             className="sb-hero-logo"
-            src="/logo-light.png"
+            // Con BASE_URL y no con "/": en GitHub Pages el sitio cuelga de
+            // /soulbrew.frontend/, así que la ruta absoluta se iba a la raíz
+            // del dominio y el logo caía siempre al título de respaldo.
+            src={`${import.meta.env.BASE_URL}logo-light.png`}
             alt="Soul Brew"
             onError={() => setLogoBroken(true)}
           />
