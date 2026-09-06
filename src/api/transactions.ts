@@ -13,7 +13,7 @@ import {
   type Transaction,
 } from "firebase/firestore";
 import { db } from "../firebase";
-import type { OrderItem, PaymentMethod, RecipeItem } from "../types";
+import type { ChosenOption, OrderItem, PaymentMethod, RecipeItem } from "../types";
 
 /**
  * Escrituras que mueven dinero o inventario.
@@ -31,6 +31,9 @@ import type { OrderItem, PaymentMethod, RecipeItem } from "../types";
  */
 
 const MAX_ITEMS = 8;
+
+/** Tope de personalizaciones por renglón, también impuesto por las reglas. */
+const MAX_OPTIONS = 8;
 
 export class OrderError extends Error {}
 
@@ -135,7 +138,7 @@ export interface CreateOrderInput {
   customerName: string;
   /** Opcional: cadena vacía si el cliente no quiso darlo. */
   customerPhone: string;
-  items: Array<{ productId: string; quantity: number }>;
+  items: Array<{ productId: string; quantity: number; options?: ChosenOption[] }>;
 }
 
 export interface LoyaltyResult {
@@ -153,15 +156,28 @@ export async function createPublicOrder(input: CreateOrderInput) {
   if (customerPhone && !PHONE_PATTERN.test(customerPhone)) {
     throw new OrderError("El número de celular debe tener 10 dígitos.");
   }
-  const aggregated = new Map<string, number>();
+  // Dos veces el mismo producto se junta en un renglón sólo si lleva la misma
+  // personalización: un matcha con lotus y otro con mazapán son dos cosas
+  // distintas aunque salgan del mismo producto.
+  const lines = new Map<string, { productId: string; quantity: number; options: ChosenOption[] }>();
   for (const item of input.items) {
-    aggregated.set(item.productId, (aggregated.get(item.productId) ?? 0) + item.quantity);
+    const options = item.options ?? [];
+    const key = `${item.productId}|${options.map((o) => o.optionId).sort().join(",")}`;
+    const line = lines.get(key);
+    if (line) line.quantity += item.quantity;
+    else lines.set(key, { productId: item.productId, quantity: item.quantity, options });
   }
-  const productIds = [...aggregated.keys()];
-  if (!productIds.length) throw new OrderError("Elige al menos un producto.");
-  if (productIds.length > MAX_ITEMS) {
-    throw new OrderError(`Una orden admite hasta ${MAX_ITEMS} productos distintos.`);
+
+  const rows = [...lines.values()];
+  if (!rows.length) throw new OrderError("Elige al menos un producto.");
+  if (rows.length > MAX_ITEMS) {
+    throw new OrderError(`Una orden admite hasta ${MAX_ITEMS} renglones distintos.`);
   }
+  if (rows.some((row) => row.options.length > MAX_OPTIONS)) {
+    throw new OrderError(`Cada bebida admite hasta ${MAX_OPTIONS} personalizaciones.`);
+  }
+
+  const productIds = [...new Set(rows.map((row) => row.productId))];
 
   const counterRef = doc(db, "counters", "orders");
   const orderRef = doc(collection(db, "orders"));
@@ -172,20 +188,30 @@ export async function createPublicOrder(input: CreateOrderInput) {
     const counterSnap = await tx.get(counterRef);
     const custSnap = custRef ? await tx.get(custRef) : null;
 
+    const byId = new Map(productSnaps.map((snapshot) => [snapshot.id, snapshot]));
+
     let total = 0;
     const items: OrderItem[] = [];
-    for (const snapshot of productSnaps) {
-      if (!snapshot.exists()) throw new OrderError("Uno o más productos no existen");
+    for (const row of rows) {
+      const snapshot = byId.get(row.productId);
+      if (!snapshot?.exists()) throw new OrderError("Uno o más productos no existen");
       const product = snapshot.data() as { name: string; price: number; active: boolean };
       if (!product.active) throw new OrderError(`${product.name} no está disponible`);
 
-      const quantity = aggregated.get(snapshot.id)!;
-      // Multiplicación sin redondear: las reglas de Firestore hacen la misma
-      // cuenta con los mismos operandos, y deben dar exactamente el mismo
-      // resultado en punto flotante para que la validación coincida.
-      const subtotal = product.price * quantity;
+      // Las sumas y multiplicaciones van sin redondear: las reglas de Firestore
+      // hacen la misma cuenta con los mismos operandos y deben dar exactamente
+      // el mismo resultado en punto flotante para que la validación coincida.
+      const unitPrice = row.options.reduce((sum, option) => sum + option.priceDelta, product.price);
+      const subtotal = unitPrice * row.quantity;
       total += subtotal;
-      items.push({ productId: snapshot.id, productName: product.name, quantity, unitPrice: product.price, subtotal });
+      items.push({
+        productId: row.productId,
+        productName: product.name,
+        quantity: row.quantity,
+        unitPrice,
+        subtotal,
+        options: row.options,
+      });
     }
 
     const sequence = ((counterSnap.data()?.value as number | undefined) ?? 0) + 1;

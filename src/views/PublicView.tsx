@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { subscribeCategories, subscribePublicProducts } from "../api/collections";
+import {
+  subscribeCategories,
+  subscribeOptionGroups,
+  subscribePublicProducts,
+} from "../api/collections";
 import { errorMessage } from "../api/errors";
 import { createPublicOrder, type LoyaltyResult } from "../api/transactions";
 import { Icon } from "../components/Icon";
 import { LoyaltyCard } from "../components/LoyaltyCard";
-import type { Category, Product, ProductCategory } from "../types";
+import { ProductCustomizer } from "../components/ProductCustomizer";
+import type { ChosenOption, Category, OptionGroup, Product, ProductCategory } from "../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
@@ -16,11 +21,31 @@ const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN
  */
 const MAX_QTY = 20;
 
+/**
+ * Un renglón del carrito. Lleva su propia personalización, así que el mismo
+ * producto puede estar dos veces con opciones distintas.
+ */
+interface CartLine {
+  id: string;
+  productId: string;
+  quantity: number;
+  options: ChosenOption[];
+}
+
+/** Identidad de un renglón: mismo producto y mismas opciones se suman. */
+function lineKey(productId: string, options: ChosenOption[]) {
+  return `${productId}|${options.map((option) => option.optionId).sort().join(",")}`;
+}
+
 export function PublicView() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [category, setCategory] = useState<ProductCategory | null>(null);
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [groups, setGroups] = useState<OptionGroup[]>([]);
+  const [customizing, setCustomizing] = useState<{ product: Product; line: CartLine | null } | null>(
+    null,
+  );
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [message, setMessage] = useState("");
@@ -57,6 +82,15 @@ export function PublicView() {
     [],
   );
 
+  // Las personalizaciones son un extra: si no se pueden leer, el menú sigue
+  // funcionando y los productos se agregan con su precio de lista. No se le
+  // enseña un error al cliente por algo que no le impide pedir.
+  useEffect(
+    () =>
+      subscribeOptionGroups(setGroups, () => setGroups([])),
+    [],
+  );
+
   // La primera categoría se elige sola en cuanto llegan: cuáles existen ya no
   // se sabe hasta que Firestore responde.
   useEffect(() => {
@@ -68,31 +102,69 @@ export function PublicView() {
 
   const activeCategory = categories.find((item) => item.id === category) ?? null;
   const categoryProducts = products.filter((product) => product.category === category);
-  const selections = products.filter((product) => cart[product.id]);
-  const itemCount = selections.reduce((sum, product) => sum + (cart[product.id] ?? 0), 0);
+
+  const productOf = (id: string) => products.find((product) => product.id === id);
+
+  /** Precio de un renglón: el del producto más lo que cobren sus opciones. */
+  const linePrice = (line: CartLine) => {
+    const base = productOf(line.productId)?.price ?? 0;
+    return line.options.reduce((sum, option) => sum + option.priceDelta, base);
+  };
+
+  const itemCount = cart.reduce((sum, line) => sum + line.quantity, 0);
   const total = useMemo(
-    () => selections.reduce((sum, product) => sum + product.price * (cart[product.id] ?? 0), 0),
-    [cart, selections],
+    () => cart.reduce((sum, line) => sum + linePrice(line) * line.quantity, 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cart, products],
   );
 
-  function changeQuantity(product: Product, difference: number) {
+  /**
+   * Abre la ventana de personalización. Si el producto no tiene grupos, se va
+   * derecho al carrito: no tiene caso enseñar una ventana sin nada que elegir.
+   */
+  function openProduct(product: Product) {
+    const hasOptions = product.optionGroups.some((assigned) => {
+      const group = groups.find((item) => item.id === assigned.groupId);
+      return group?.active && group.options.some((option) => option.active);
+    });
+    if (!hasOptions) return addLine(product.id, [], 1);
+    setCustomizing({ product, line: null });
+  }
+
+  function addLine(productId: string, options: ChosenOption[], quantity: number) {
+    const key = lineKey(productId, options);
     setCart((current) => {
-      const next = Math.max(0, Math.min(MAX_QTY, (current[product.id] ?? 0) + difference));
-      return { ...current, [product.id]: next };
+      const existing = current.find((line) => lineKey(line.productId, line.options) === key);
+      if (existing) {
+        return current.map((line) =>
+          line === existing
+            ? { ...line, quantity: Math.min(MAX_QTY, line.quantity + quantity) }
+            : line,
+        );
+      }
+      return [...current, { id: `${key}-${Date.now()}`, productId, options, quantity }];
     });
   }
 
-  function removeFromCart(product: Product) {
-    setCart((current) => {
-      const next = { ...current };
-      delete next[product.id];
-      return next;
-    });
+  function changeQuantity(lineId: string, difference: number) {
+    setCart((current) =>
+      current
+        .map((line) =>
+          line.id === lineId
+            ? { ...line, quantity: Math.max(0, Math.min(MAX_QTY, line.quantity + difference)) }
+            : line,
+        )
+        .filter((line) => line.quantity > 0),
+    );
+  }
+
+  function removeLine(lineId: string) {
+    setCart((current) => current.filter((line) => line.id !== lineId));
   }
 
   async function placeOrder(event: React.FormEvent) {
     event.preventDefault();
-    if (!selections.length) return setError("Elige al menos un producto.");
+    if (!cart.length) return setError("Elige al menos un producto.");
     if (customerName.trim().length < 2) return setError("Escribe tu nombre.");
     if (customerPhone && !/^\d{10}$/.test(customerPhone)) {
       return setError("El número de celular debe tener 10 dígitos.");
@@ -103,9 +175,10 @@ export function PublicView() {
       const order = await createPublicOrder({
         customerName,
         customerPhone,
-        items: selections.map((product) => ({
-          productId: product.id,
-          quantity: cart[product.id]!,
+        items: cart.map((line) => ({
+          productId: line.productId,
+          quantity: line.quantity,
+          options: line.options,
         })),
       });
       setMessage(`¡Orden ${order.code} recibida! Paga ${money.format(order.total)} en caja.`);
@@ -114,7 +187,7 @@ export function PublicView() {
       }
       setCustomerName("");
       setCustomerPhone("");
-      setCart({});
+      setCart([]);
       setCartOpen(false);
     } catch (reason) {
       setError(errorMessage(reason, "No pudimos crear tu orden"));
@@ -180,12 +253,15 @@ export function PublicView() {
         ) : (
           <div className="sb-product-grid">
             {categoryProducts.map((product) => {
-              const quantity = cart[product.id] ?? 0;
               // La disponibilidad la decide sólo el interruptor manual
               // "agotado"; el stock es un dato contable, no un bloqueo de venta.
               const outOfStock = product.soldOut;
               return (
-                <article className={`sb-product-card ${outOfStock ? "sold-out" : ""}`} key={product.id}>
+                <article
+                  className={`sb-product-card ${outOfStock ? "sold-out" : ""}`}
+                  key={product.id}
+                  onClick={() => !outOfStock && openProduct(product)}
+                >
                   <div className="sb-product-art">
                     {product.imageUrl ? (
                       <img src={product.imageUrl} alt={product.name} loading="lazy" />
@@ -195,8 +271,10 @@ export function PublicView() {
                     {!outOfStock && (
                       <button
                         className="sb-add-btn"
-                        onClick={() => changeQuantity(product, 1)}
-                        disabled={quantity >= MAX_QTY}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openProduct(product);
+                        }}
                         aria-label={`Agregar ${product.name}`}
                       >
                         +
@@ -209,15 +287,7 @@ export function PublicView() {
                       <strong>{money.format(product.price)}</strong>
                     </div>
                     <p>{product.description || "Preparado al momento con ingredientes de la casa."}</p>
-                    {outOfStock ? (
-                      <span className="sb-stock-label">Agotado por hoy</span>
-                    ) : quantity > 0 ? (
-                      <div className="sb-qty">
-                        <button onClick={() => changeQuantity(product, -1)}>−</button>
-                        <span>{quantity}</span>
-                        <button onClick={() => changeQuantity(product, 1)} disabled={quantity >= MAX_QTY}>+</button>
-                      </div>
-                    ) : null}
+                    {outOfStock && <span className="sb-stock-label">Agotado por hoy</span>}
                   </div>
                 </article>
               );
@@ -269,44 +339,64 @@ export function PublicView() {
               <button onClick={() => setCartOpen(false)} aria-label="Cerrar">✕</button>
             </div>
             <div className="sb-drawer-lines">
-              {selections.map((product) => {
-                const quantity = cart[product.id]!;
+              {cart.map((line) => {
+                const product = productOf(line.productId);
+                if (!product) return null;
                 return (
-                  <div className="sb-drawer-line" key={product.id}>
+                  <div className="sb-drawer-line" key={line.id}>
                     <div className="sb-drawer-line-info">
                       <strong>{product.name}</strong>
-                      <small>{money.format(product.price)} c/u</small>
+                      <small>{money.format(linePrice(line))} c/u</small>
+                      {line.options.length > 0 && (
+                        <ul className="sb-line-options">
+                          {line.options.map((option) => (
+                            <li key={option.optionId}>
+                              {option.groupName}: {option.optionName}
+                              {option.priceDelta > 0 && ` (+${money.format(option.priceDelta)})`}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {product.optionGroups.length > 0 && (
+                        <button
+                          type="button"
+                          className="sb-line-edit"
+                          onClick={() => setCustomizing({ product, line })}
+                        >
+                          Editar
+                        </button>
+                      )}
                     </div>
                     <button
                       className="sb-drawer-remove"
-                      onClick={() => removeFromCart(product)}
+                      onClick={() => removeLine(line.id)}
                       aria-label={`Quitar ${product.name} de la orden`}
                     >
                       ✕
                     </button>
                     <div className="sb-qty">
                       <button
-                        onClick={() => changeQuantity(product, -1)}
+                        onClick={() => changeQuantity(line.id, -1)}
                         aria-label={`Una unidad menos de ${product.name}`}
                       >
                         −
                       </button>
-                      <span>{quantity}</span>
+                      <span>{line.quantity}</span>
                       <button
-                        onClick={() => changeQuantity(product, 1)}
-                        disabled={quantity >= MAX_QTY}
+                        onClick={() => changeQuantity(line.id, 1)}
+                        disabled={line.quantity >= MAX_QTY}
                         aria-label={`Una unidad más de ${product.name}`}
                       >
                         +
                       </button>
                     </div>
                     <strong className="sb-drawer-line-total">
-                      {money.format(product.price * quantity)}
+                      {money.format(linePrice(line) * line.quantity)}
                     </strong>
                   </div>
                 );
               })}
-              {!selections.length && <p className="muted">Aún no eliges nada.</p>}
+              {!cart.length && <p className="muted">Aún no eliges nada.</p>}
             </div>
             <div className="sb-drawer-total"><span>Total</span><strong>{money.format(total)}</strong></div>
             <form onSubmit={placeOrder}>
@@ -327,7 +417,7 @@ export function PublicView() {
                 maxLength={10}
                 placeholder="10 dígitos"
               />
-              <button className="primary-button" disabled={sending || !selections.length}>{sending ? "Enviando…" : "Enviar orden"}</button>
+              <button className="primary-button" disabled={sending || !cart.length}>{sending ? "Enviando…" : "Enviar orden"}</button>
             </form>
             <small>
               Danos tu celular y activa tu tarjeta de puntos: cada 10 compras, una bebida sale gratis. El
@@ -335,6 +425,24 @@ export function PublicView() {
             </small>
           </div>
         </div>
+      )}
+
+      {customizing && (
+        <ProductCustomizer
+          product={customizing.product}
+          groups={groups}
+          initial={customizing.line?.options ?? []}
+          initialQuantity={customizing.line?.quantity ?? 1}
+          onClose={() => setCustomizing(null)}
+          onConfirm={(options, quantity) => {
+            // Editar un renglón lo reemplaza: se quita el viejo y se agrega con
+            // lo nuevo, que de paso lo funde con otro igual si ya existía.
+            if (customizing.line) removeLine(customizing.line.id);
+            addLine(customizing.product.id, options, quantity);
+            setCustomizing(null);
+            setCartOpen(true);
+          }}
+        />
       )}
 
       {loyalty && (

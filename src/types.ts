@@ -59,6 +59,11 @@ export interface Product {
    * categoría (el Banana matcha y su plátano). Vacía = usa la de la categoría.
    */
   recipe: RecipeItem[];
+  /**
+   * Grupos de personalización que le aplican. Vacío = se agrega al carrito
+   * directo, sin ventana de opciones.
+   */
+  optionGroups: ProductOptionGroup[];
   stock: number;
   active: boolean;
   /**
@@ -68,12 +73,65 @@ export interface Product {
   soldOut: boolean;
 }
 
+/**
+ * Una opción dentro de un grupo de personalización: "Almendra", "Lotus".
+ * `imageUrl` es opcional — si la trae, la foto del producto cambia a ésa
+ * cuando el cliente la elige.
+ */
+export interface OptionChoice {
+  id: string;
+  name: string;
+  /** Lo que suma al precio del producto. 0 si no cobra nada. */
+  priceDelta: number;
+  imageUrl: string | null;
+  active: boolean;
+}
+
+/**
+ * Grupo de personalización, armado desde el panel: "Tipo de leche", "Cold
+ * Foam", "Temperatura". Cada producto elige cuáles le aplican, así que sumar
+ * un cold foam nuevo no toca el código.
+ */
+export interface OptionGroup {
+  id: string;
+  name: string;
+  /** SINGLE: se elige una. MULTI: se pueden elegir varias (extras). */
+  selection: "SINGLE" | "MULTI";
+  /** Si es obligatorio, el cliente no puede agregar al carrito sin elegir. */
+  required: boolean;
+  order: number;
+  active: boolean;
+  options: OptionChoice[];
+}
+
+/** Qué grupo le aplica a un producto y con qué opciones de ese grupo. */
+export interface ProductOptionGroup {
+  groupId: string;
+  /** Vacío = todas las opciones activas del grupo. */
+  optionIds: string[];
+}
+
+/**
+ * Lo que el cliente eligió, copiado dentro del renglón de la orden. Va
+ * denormalizado para que el ticket siga legible aunque después se borre el
+ * grupo o cambie el precio de la opción.
+ */
+export interface ChosenOption {
+  groupId: string;
+  groupName: string;
+  optionId: string;
+  optionName: string;
+  priceDelta: number;
+}
+
 export interface OrderItem {
   productId: string;
   productName: string;
   quantity: number;
+  /** Precio del producto más los recargos de lo elegido. */
   unitPrice: number;
   subtotal: number;
+  options: ChosenOption[];
 }
 
 export interface Order {

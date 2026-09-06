@@ -24,10 +24,13 @@ import type {
   Category,
   Customer,
   InventoryMovement,
+  OptionGroup,
   Order,
+  OrderItem,
   OrderStatus,
   Product,
   ProductCategory,
+  ProductOptionGroup,
   RecipeItem,
   Supply,
   SupplyMovement,
@@ -59,6 +62,7 @@ function toProduct(snapshot: Snapshot): Product {
     price: data.price,
     cost: data.cost ?? 0,
     recipe: data.recipe ?? [],
+    optionGroups: data.optionGroups ?? [],
     stock: data.stock,
     active: Boolean(data.active),
     soldOut: Boolean(data.soldOut),
@@ -88,7 +92,8 @@ function toOrder(snapshot: Snapshot): Order {
     status: data.status as OrderStatus,
     paymentMethod: data.paymentMethod ?? null,
     total: data.total,
-    items: data.items ?? [],
+    // Los pedidos anteriores a las personalizaciones no traen `options`.
+    items: (data.items ?? []).map((item: OrderItem) => ({ ...item, options: item.options ?? [] })),
     cashSessionId: data.cashSessionId ?? null,
     createdAt: toDate(data.createdAt),
     paidAt: toDate(data.paidAt),
@@ -535,6 +540,8 @@ export async function createProduct(input: ProductInput) {
     soldOut: false,
     // La receta propia se captura después; mientras, hereda la de su categoría.
     recipe: [],
+    // Sin personalizaciones hasta que se le asignen desde el panel.
+    optionGroups: [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -567,6 +574,47 @@ export async function deleteProduct(id: string) {
   const removed = await deleteMovementsOf("inventoryMovements", "productId", id);
   await deleteDoc(doc(db, "products", id));
   return removed;
+}
+
+function toOptionGroup(snapshot: Snapshot): OptionGroup {
+  const data = snapshot.data();
+  return {
+    id: snapshot.id,
+    name: data.name,
+    selection: (data.selection ?? "SINGLE") as OptionGroup["selection"],
+    required: Boolean(data.required),
+    order: data.order ?? 0,
+    active: Boolean(data.active),
+    options: data.options ?? [],
+  };
+}
+
+/** Grupos de personalización. Lectura pública: el menú los necesita sin sesión. */
+export function subscribeOptionGroups(
+  onData: (groups: OptionGroup[]) => void,
+  onError: (error: Error) => void,
+) {
+  return subscribe("optionGroups", [orderBy("order")], toOptionGroup, onData, onError);
+}
+
+export type OptionGroupInput = Omit<OptionGroup, "id">;
+
+export async function createOptionGroup(input: OptionGroupInput) {
+  const ref = await addDoc(collection(db, "optionGroups"), input);
+  return ref.id;
+}
+
+export async function updateOptionGroup(id: string, input: OptionGroupInput) {
+  await setDoc(doc(db, "optionGroups", id), input);
+}
+
+export async function deleteOptionGroup(id: string) {
+  await deleteDoc(doc(db, "optionGroups", id));
+}
+
+/** Qué grupos de personalización le aplican a un producto. */
+export async function setProductOptionGroups(id: string, optionGroups: ProductOptionGroup[]) {
+  await updateDoc(doc(db, "products", id), { optionGroups, updatedAt: serverTimestamp() });
 }
 
 /**

@@ -1,8 +1,13 @@
-import { useState } from "react";
-import { deleteProduct, updateProduct } from "../../api/collections";
+import { useEffect, useState } from "react";
+import {
+  deleteProduct,
+  setProductOptionGroups,
+  subscribeOptionGroups,
+  updateProduct,
+} from "../../api/collections";
 import { effectiveRecipe } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
-import type { Category, Product } from "../../types";
+import type { Category, OptionGroup, Product, ProductOptionGroup } from "../../types";
 import { ImageField } from "./ImageField";
 
 interface Props {
@@ -16,9 +21,45 @@ interface Props {
 export function ProductEditor({ product, categories, onClose, onSaved, onError }: Props) {
   const [image, setImage] = useState<string | null>(product.imageUrl);
   const [busy, setBusy] = useState(false);
+  const [groups, setGroups] = useState<OptionGroup[]>([]);
+  const [assigned, setAssigned] = useState<ProductOptionGroup[]>(product.optionGroups);
 
   // Con receta, el costo se calcula de los insumos y el campo manual sobra.
   const hasRecipe = effectiveRecipe(product, categories).length > 0;
+
+  useEffect(
+    () =>
+      subscribeOptionGroups(
+        (list) => setGroups(list.filter((group) => group.active)),
+        (reason) => onError(errorMessage(reason, "No se pudieron cargar las personalizaciones")),
+      ),
+    [onError],
+  );
+
+  function toggleGroup(groupId: string, on: boolean) {
+    setAssigned((current) =>
+      on
+        ? [...current, { groupId, optionIds: [] }]
+        : current.filter((entry) => entry.groupId !== groupId),
+    );
+  }
+
+  /** Vacío = todas. Al desmarcar una opción se materializa la lista completa menos ésa. */
+  function toggleOption(group: OptionGroup, optionId: string, on: boolean) {
+    setAssigned((current) =>
+      current.map((entry) => {
+        if (entry.groupId !== group.id) return entry;
+        const active = group.options.filter((option) => option.active).map((option) => option.id);
+        const currentIds = entry.optionIds.length ? entry.optionIds : active;
+        const next = on
+          ? [...currentIds, optionId]
+          : currentIds.filter((id) => id !== optionId);
+        // Si vuelven a quedar todas, se guarda vacío para que siga siguiendo al
+        // grupo cuando el panel le agregue opciones nuevas.
+        return { ...entry, optionIds: next.length === active.length ? [] : next };
+      }),
+    );
+  }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,6 +75,9 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
         cost: Number(data.get("cost") ?? 0) || 0,
         active: data.get("active") === "on",
       });
+      // Va aparte de updateProduct para no arrastrar la lista completa de
+      // grupos por la misma vía que valida nombre, precio y categoría.
+      await setProductOptionGroups(product.id, assigned);
       onSaved(`"${String(data.get("name"))}" actualizado.`);
       onClose();
     } catch (reason) {
@@ -151,6 +195,52 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
           <input type="checkbox" name="active" defaultChecked={product.active} />
           <span>Visible en el menú público</span>
         </label>
+
+        <label>Personalizaciones</label>
+        <p className="editor-note">
+          Qué puede elegir el cliente al pedirlo. Los grupos se arman en Personalizaciones; aquí
+          decides cuáles le tocan a este producto y con qué opciones.
+        </p>
+        <div className="link-products">
+          {groups.map((group) => {
+            const entry = assigned.find((item) => item.groupId === group.id);
+            const active = group.options.filter((option) => option.active);
+            return (
+              <div className="link-group" key={group.id}>
+                <label className="link-product link-group-head">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(entry)}
+                    onChange={(event) => toggleGroup(group.id, event.target.checked)}
+                  />
+                  <span>
+                    <strong>{group.name}</strong> — {group.selection === "SINGLE" ? "elige una" : "elige varias"}
+                    {group.required && ", obligatorio"}
+                  </span>
+                </label>
+                {entry &&
+                  active.map((option) => (
+                    <label className="link-product link-child" key={option.id}>
+                      <input
+                        type="checkbox"
+                        checked={entry.optionIds.length === 0 || entry.optionIds.includes(option.id)}
+                        onChange={(event) => toggleOption(group, option.id, event.target.checked)}
+                      />
+                      <span>
+                        {option.name}
+                        {option.priceDelta > 0 && ` · +$${option.priceDelta}`}
+                      </span>
+                    </label>
+                  ))}
+              </div>
+            );
+          })}
+          {!groups.length && (
+            <p className="reference-empty">
+              Todavía no hay personalizaciones. Créalas en el apartado Personalizaciones.
+            </p>
+          )}
+        </div>
 
         <div className="editor-actions">
           <button type="button" onClick={onClose} disabled={busy}>

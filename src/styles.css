@@ -147,6 +147,38 @@ small { color: #6d746e; }
 .sb-drawer-line .sb-qty { margin-top: 0; }
 .sb-drawer-line-total { justify-self: end; white-space: nowrap; }
 .sb-drawer-total { display: flex; justify-content: space-between; padding: 1rem 0; font-size: 1.05rem; font-weight: 700; }
+.sb-line-options { margin: .35rem 0 0; padding-left: .9rem; color: var(--sb-muted); font-size: .74rem; line-height: 1.5; }
+.sb-line-edit { margin-top: .35rem; padding: 0; border: 0; background: none; color: var(--sb-brown); font-size: .74rem; font-weight: 800; text-decoration: underline; }
+
+/* Ventana de personalización: foto grande arriba, opciones abajo, total fijo
+   al pie. En celular ocupa la pantalla; en escritorio queda centrada. */
+.sb-customizer { position: relative; display: flex; flex-direction: column; width: 100%; max-height: 92vh; background: #fff; border-radius: 22px 22px 0 0; overflow: hidden; animation: sb-sheet-up .22s ease-out; }
+.sb-customizer-close { position: absolute; top: .8rem; right: .8rem; z-index: 2; width: 2.1rem; height: 2.1rem; border: 0; border-radius: 50%; background: rgba(255,255,255,.9); box-shadow: 0 2px 8px rgba(0,0,0,.18); font-size: .9rem; }
+.sb-customizer-art { flex: 0 0 auto; aspect-ratio: 3 / 2; background: #f4efe7; display: grid; place-items: center; overflow: hidden; }
+.sb-customizer-art img { width: 100%; height: 100%; object-fit: cover; animation: sb-fade .28s ease; }
+@keyframes sb-fade { from { opacity: .35; } to { opacity: 1; } }
+.sb-customizer-placeholder { font-size: 3rem; }
+.sb-customizer-body { flex: 1 1 auto; overflow-y: auto; padding: 1.15rem 1.25rem .5rem; }
+.sb-customizer-body h2 { margin: 0; font-family: Georgia, serif; font-weight: 500; font-size: 1.5rem; }
+.sb-customizer-desc { margin: .3rem 0 1.1rem; color: var(--sb-muted); font-size: .85rem; line-height: 1.45; }
+
+.sb-optgroup { margin-bottom: 1.25rem; }
+.sb-optgroup h3 { margin: 0 0 .6rem; font-size: .82rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.sb-required { color: #b1492f; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.sb-multi { color: var(--sb-muted); font-weight: 600; text-transform: none; letter-spacing: 0; }
+.sb-chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+.sb-chips button { border: 1px solid var(--sb-line); border-radius: 99px; padding: .55rem .9rem; background: #fff; font-size: .82rem; font-weight: 650; color: #2c1c12; }
+.sb-chips button em { font-style: normal; color: var(--sb-price); font-weight: 750; }
+.sb-chips button.active { border-color: var(--sb-brown); background: var(--sb-brown); color: #fff; }
+.sb-chips button.active em { color: #f0dcc6; }
+.sb-chips.missing button { border-color: #e0b4a6; }
+.sb-optgroup-error { margin: .45rem 0 0; color: #b1492f; font-size: .76rem; font-weight: 700; }
+
+.sb-customizer-foot { flex: 0 0 auto; display: flex; align-items: center; gap: 1rem; padding: .9rem 1.25rem calc(1rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--sb-line); background: #fff; }
+.sb-customizer-foot > div { display: flex; flex-direction: column; }
+.sb-customizer-foot span { color: var(--sb-muted); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.sb-customizer-foot strong { font-size: 1.25rem; }
+.sb-customizer-foot .primary-button { flex: 1; margin: 0; }
 
 /* Tarjeta de puntos: aparece tras ordenar (si dieron teléfono) y en la
    página compartible /tarjeta/:telefono. */
@@ -177,6 +209,9 @@ small { color: #6d746e; }
   .sb-product-grid { grid-template-columns: repeat(3, 1fr); max-width: 1100px; }
   .sb-drawer-backdrop { align-items: center; justify-content: flex-end; }
   .sb-drawer { max-width: 420px; max-height: calc(100vh - 2rem); margin: 1rem; border-radius: 22px; animation: none; }
+  /* En pantallas grandes la personalización se centra como un diálogo. */
+  .sb-drawer-backdrop:has(> .sb-customizer) { align-items: center; justify-content: center; padding: 1.5rem; }
+  .sb-customizer { max-width: 460px; max-height: calc(100vh - 3rem); border-radius: 20px; animation: none; }
 }
 
 /* Login */
@@ -848,6 +883,22 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .link-child { padding-left: 18px; }
 .link-product input:disabled + span { color: #a99584; }
 .link-count { margin: 6px 0 10px; color: #6b4226; font-size: 12px; font-weight: 700; }
+
+/* Editor de un grupo de personalización: nombre, recargo, orden y foto. */
+.editor-card.wide { max-width: 560px; }
+.option-group-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+.option-list { margin: 8px 0 10px; }
+.option-row { padding: 10px 0; border-bottom: 1px solid var(--ref-border); }
+.option-row:last-child { border-bottom: 0; }
+.option-main { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 8px; align-items: center; }
+.option-main > input { margin: 0; }
+.option-price { display: flex; align-items: center; gap: 4px; }
+.option-price em { color: #9b765c; font-size: 11.5px; font-style: normal; }
+.option-price input { margin: 0; min-width: 0; text-align: right; }
+.option-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; }
+.option-actions > button:not(.avail-toggle):not(.category-delete) { border: 1px solid #ddcabb; border-radius: 7px; padding: 3px 8px; background: #fff; font-size: 11px; color: #67442f; }
+.option-image { margin-top: 8px; }
+.option-image small { display: block; margin-top: 4px; color: #9b765c; font-size: 11px; }
 
 /* Alta de insumo: una frase por renglón ("Cada paquete trae [12] piezas"),
    para que no queden tres casillas seguidas sin decir cuál es cuál. */
