@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { optionImageFor, resolveOptionGroups } from "../api/options";
 import type { ChosenOption, OptionChoice, OptionGroup, OptionImage, Product } from "../types";
 
@@ -78,6 +78,18 @@ export function ProductCustomizer({
   const image =
     [...chosen].reverse().find((item) => item.imageUrl)?.imageUrl ?? product.imageUrl;
 
+  // Al elegir el cold foam la foto cambia arriba, pero el dedo está abajo en
+  // los chips y no se ve nada. Cada vez que la imagen cambia se sube sola.
+  const body = useRef<HTMLDivElement>(null);
+  const shown = useRef(image);
+  useEffect(() => {
+    if (shown.current === image) return;
+    shown.current = image;
+    // Salto directo y no `behavior: 'smooth'`: hay navegadores que se comen
+    // el desplazamiento suave y entonces no subiría nada.
+    if (body.current) body.current.scrollTop = 0;
+  }, [image]);
+
   function pick(group: OptionGroup, option: OptionChoice) {
     const already = chosen.some((item) => item.optionId === option.id);
     const entry: Picked = {
@@ -137,7 +149,7 @@ export function ProductCustomizer({
           )}
         </div>
 
-        <div className="sb-customizer-body">
+        <div className="sb-customizer-body" ref={body}>
           <h2>Personaliza tu {product.name}</h2>
           {product.description && <p className="sb-customizer-desc">{product.description}</p>}
 

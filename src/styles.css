@@ -155,6 +155,9 @@ small { color: #6d746e; }
 /* Ventana de personalización: foto grande arriba, opciones abajo, total fijo
    al pie. En celular ocupa la pantalla; en escritorio queda centrada. */
 .sb-customizer { position: relative; display: flex; flex-direction: column; width: 100%; max-height: 92vh; background: #fff; border-radius: 22px 22px 0 0; overflow: hidden; animation: sb-sheet-up .22s ease-out; }
+/* En iOS la barra del navegador se come parte de la pantalla y con vh la foto
+   quedaba cortada arriba. dvh mide lo que de verdad se ve. */
+@supports (height: 100dvh) { .sb-customizer { max-height: 92dvh; } }
 .sb-customizer-close { position: absolute; top: .8rem; right: .8rem; z-index: 2; width: 2.1rem; height: 2.1rem; border: 0; border-radius: 50%; background: rgba(255,255,255,.9); box-shadow: 0 2px 8px rgba(0,0,0,.18); font-size: .9rem; }
 .sb-customizer-art { flex: 0 0 auto; aspect-ratio: 3 / 2; background: #f4efe7; display: grid; place-items: center; overflow: hidden; }
 .sb-customizer-art img { width: 100%; height: 100%; object-fit: cover; animation: sb-fade .28s ease; }
