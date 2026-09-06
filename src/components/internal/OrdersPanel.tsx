@@ -20,7 +20,7 @@ export function OrdersPanel({ user }: { user: User }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [view, setView] = useState<"orders" | "summary">("summary");
+  const [view, setView] = useState<"orders" | "summary">("orders");
 
   // Este panel es la operación del día: sólo trae los pedidos de hoy. Los de
   // días anteriores viven en Historial, para que la barra no tenga que
@@ -97,7 +97,7 @@ export function OrdersPanel({ user }: { user: User }) {
             <h1>Resumen de hoy</h1>
             <p>Cómo va el día. El detalle está en Pedidos.</p>
           </div>
-          <div className="segmented">
+          <div className="segmented view-segmented">
             <button onClick={() => setView("orders")}>Pedidos</button>
             <button className="active">Resumen</button>
           </div>
@@ -120,8 +120,8 @@ export function OrdersPanel({ user }: { user: User }) {
           </button>
         </div>
         <div className="segmented view-segmented">
-          <button onClick={() => setView("summary")}>Resumen</button>
           <button className="active">Pedidos</button>
+          <button onClick={() => setView("summary")}>Resumen</button>
         </div>
         <div className="segmented">
           {(["PENDING", "PAID", "CANCELLED", ""] as const).map((value) => (

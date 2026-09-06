@@ -253,7 +253,10 @@ small { color: #6d746e; }
 .profile-block button, .mobile-header button { border: 0; background: transparent; color: #aebbb0; font-size: .75rem; }
 .internal-content { padding: clamp(2rem, 5vw, 5rem); min-width: 0; }
 .mobile-header { display: none; }
-.panel-heading { display: flex; justify-content: space-between; align-items: end; gap: 2rem; margin-bottom: 2.5rem; }
+/* Envuelve porque Pedidos trae cuatro bloques (título, alta, vista y filtro) y
+   en una sola línea empujaban el título fuera de la pantalla. */
+.panel-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 1rem 2rem; margin-bottom: 2.5rem; }
+.panel-heading > .reference-heading { flex: 1 1 16rem; min-width: 0; }
 .panel-heading h2 { margin: 0; }
 .segmented { display: flex; background: #e5e2d9; padding: 3px; border-radius: 4px; }
 .segmented button { border: 0; background: transparent; padding: .55rem .8rem; border-radius: 3px; font-size: .75rem; font-weight: 750; color: #6a716a; }
