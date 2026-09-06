@@ -26,7 +26,7 @@ export function InternalView() {
           <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}><Icon name="clock"/> Historial</button>
           {canManage && <button className={tab === "catalog" ? "active" : ""} onClick={() => setTab("catalog")}><Icon name="menu"/> Menú</button>}
           <button className={tab === "cash" ? "active" : ""} onClick={() => setTab("cash")}><Icon name="cash"/> Caja</button>
-          {canManage && <button className={tab === "reports" ? "active" : ""} onClick={() => setTab("reports")}><Icon name="trend"/> Reportes</button>}
+          {canManage && <button className={tab === "reports" ? "active" : ""} onClick={() => setTab("reports")}><Icon name="coffee"/> Inventario</button>}
           {canManage && <button className={tab === "team" ? "active" : ""} onClick={() => setTab("team")}><Icon name="team"/> Configuración</button>}
         </nav>
         <div className="reference-sidebar-footer"><Link to="/" target="_blank">Vista previa <Icon name="external" size={14}/></Link><button onClick={logout}><span>{user.name.slice(0, 1).toUpperCase()}</span><Icon name="logout" size={17}/> Cerrar sesión</button></div>

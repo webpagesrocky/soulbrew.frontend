@@ -38,7 +38,7 @@ function addDays(date: Date, days: number): Date {
  * esta semana, el reporte se corrige solo en vez de quedar desfasado.
  */
 export function ReportsPanel({ user }: { user: User }) {
-  const [view, setView] = useState<"sales" | "inventory">("sales");
+  const [view, setView] = useState<"sales" | "inventory">("inventory");
   const [inventoryTab, setInventoryTab] = useState<"forecast" | "supplies">("forecast");
   const [weekOffset, setWeekOffset] = useState(0);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -199,16 +199,16 @@ export function ReportsPanel({ user }: { user: User }) {
         </div>
         <div className="segmented">
           <button
-            className={view === "sales" ? "active" : ""}
-            onClick={() => setView("sales")}
-          >
-            Ventas
-          </button>
-          <button
             className={view === "inventory" ? "active" : ""}
             onClick={() => setView("inventory")}
           >
             Inventario
+          </button>
+          <button
+            className={view === "sales" ? "active" : ""}
+            onClick={() => setView("sales")}
+          >
+            Ventas
           </button>
         </div>
       </div>
