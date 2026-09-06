@@ -45,18 +45,21 @@ export function ProductCustomizer({
   const [chosen, setChosen] = useState<Picked[]>(() =>
     // Al reabrir algo del carrito se recupera la foto de cada opción elegida,
     // que la orden no guarda, buscándola por su grupo y la categoría.
-    initial.map((item) => ({
-      ...item,
-      imageUrl: optionImageFor(
-        item.groupId,
-        item.optionId,
-        groups
-          .find((group) => group.id === item.groupId)
-          ?.options.find((option) => option.id === item.optionId)?.imageUrl ?? null,
-        product.category,
-        images,
-      ),
-    })),
+    initial.map((item) => {
+      const group = groups.find((entry) => entry.id === item.groupId);
+      return {
+        ...item,
+        imageUrl: group?.hasImages
+          ? optionImageFor(
+              item.groupId,
+              item.optionId,
+              group.options.find((option) => option.id === item.optionId)?.imageUrl ?? null,
+              product.category,
+              images,
+            )
+          : null,
+      };
+    }),
   );
   const [quantity, setQuantity] = useState(initialQuantity);
   const [showErrors, setShowErrors] = useState(false);
@@ -83,13 +86,11 @@ export function ProductCustomizer({
       optionId: option.id,
       optionName: option.name,
       priceDelta: option.priceDelta,
-      imageUrl: optionImageFor(
-        group.id,
-        option.id,
-        option.imageUrl,
-        product.category,
-        images,
-      ),
+      // Un grupo sin fotos no toca la imagen: el tipo de leche no cambia
+      // cómo se ve la bebida, el cold foam sí.
+      imageUrl: group.hasImages
+        ? optionImageFor(group.id, option.id, option.imageUrl, product.category, images)
+        : null,
     };
 
     setChosen((current) => {

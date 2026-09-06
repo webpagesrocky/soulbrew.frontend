@@ -84,6 +84,7 @@ export function OptionGroupsPanel() {
         active: true,
         // Arranca aplicando a todas; se acota al abrirlo.
         categoryIds: [],
+        hasImages: data.get("hasImages") === "on",
         options: [],
       });
       form.reset();
@@ -174,6 +175,14 @@ export function OptionGroupsPanel() {
               <input type="checkbox" name="required" />
               <span>Obligatorio: el cliente tiene que elegir</span>
             </label>
+            <label className="editor-check">
+              <input type="checkbox" name="hasImages" />
+              <span>Lleva fotos: cada opción cambia la imagen de la bebida</span>
+            </label>
+            <small className="editor-note">
+              Márcalo en cosas que se ven, como los cold foams. El tipo de leche o el endulzante no
+              cambian la foto, y así te ahorras las casillas.
+            </small>
             <button className="reference-primary" disabled={busy}>
               + Crear grupo
             </button>
@@ -357,6 +366,15 @@ function GroupEditor({ group, categories, images, busy, onClose, onSave, onDelet
           <span>Obligatorio: el cliente tiene que elegir</span>
         </label>
 
+        <label className="editor-check">
+          <input
+            type="checkbox"
+            checked={draft.hasImages}
+            onChange={(event) => patch({ hasImages: event.target.checked })}
+          />
+          <span>Lleva fotos: cada opción cambia la imagen de la bebida</span>
+        </label>
+
         <label>¿En qué categorías aparece?</label>
         <p className="editor-note">
           Todos los productos de esas categorías lo ofrecen sin que tengas que marcarlos uno por
@@ -450,6 +468,7 @@ function GroupEditor({ group, categories, images, busy, onClose, onSave, onDelet
                   </button>
                 </div>
               </div>
+              {draft.hasImages && (
               <div className="option-image">
                 <div className="option-photo">
                   <span>Para cualquier categoría</span>
@@ -482,6 +501,7 @@ function GroupEditor({ group, categories, images, busy, onClose, onSave, onDelet
                   hay ninguna, se queda la foto del producto.
                 </small>
               </div>
+              )}
             </div>
           ))}
           {!draft.options.length && (

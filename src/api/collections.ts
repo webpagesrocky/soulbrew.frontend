@@ -589,6 +589,9 @@ function toOptionGroup(snapshot: Snapshot): OptionGroup {
     // Vacío en los grupos creados antes de poder acotarlos por categoría:
     // esos siguen aplicando a todas, que es como venían funcionando.
     categoryIds: data.categoryIds ?? [],
+    // Los grupos de antes de la casilla se quedan con fotos: es como venían
+    // funcionando y así no desaparece ninguna que ya estuviera puesta.
+    hasImages: data.hasImages ?? true,
     options: data.options ?? [],
   };
 }

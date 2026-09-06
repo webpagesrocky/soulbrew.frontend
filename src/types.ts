@@ -127,6 +127,12 @@ export interface OptionGroup {
    * Chai" evita marcarlo treinta veces.
    */
   categoryIds: ProductCategory[];
+  /**
+   * Si el grupo cambia la foto de la bebida. Los cold foams sí — se ven; el
+   * tipo de leche o el endulzante no, y llenar el panel de casillas de foto
+   * que nunca se van a usar sólo estorba.
+   */
+  hasImages: boolean;
   options: OptionChoice[];
 }
 
