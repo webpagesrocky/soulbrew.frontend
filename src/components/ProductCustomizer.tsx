@@ -139,7 +139,7 @@ export function ProductCustomizer({
         </div>
 
         <div className="sb-customizer-body">
-          <h2>{product.name}</h2>
+          <h2>Personaliza tu {product.name}</h2>
           {product.description && <p className="sb-customizer-desc">{product.description}</p>}
 
           {applicable.map((group) => {
@@ -153,24 +153,51 @@ export function ProductCustomizer({
                     <span className="sb-multi"> · puedes elegir varias</span>
                   )}
                 </h3>
-                <div className={`sb-chips ${incomplete ? "missing" : ""}`}>
-                  {group.options.map((option) => {
-                    const on = chosen.some((item) => item.optionId === option.id);
-                    return (
-                      <button
-                        type="button"
-                        key={option.id}
-                        className={on ? "active" : ""}
-                        onClick={() => pick(group, option)}
-                      >
-                        {option.name}
-                        {option.priceDelta > 0 && (
-                          <em> +{money.format(option.priceDelta)}</em>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                {/* Los extras se sienten mejor como interruptores: se prenden y
+                    se apagan sueltos, no compiten entre ellos como los chips. */}
+                {group.selection === "MULTI" ? (
+                  <div className="sb-switches">
+                    {group.options.map((option) => {
+                      const on = chosen.some((item) => item.optionId === option.id);
+                      return (
+                        <button
+                          type="button"
+                          key={option.id}
+                          className={`sb-switch-row ${on ? "active" : ""}`}
+                          onClick={() => pick(group, option)}
+                          aria-pressed={on}
+                        >
+                          <span>
+                            {option.name}
+                            {option.priceDelta > 0 && (
+                              <em>+{money.format(option.priceDelta)}</em>
+                            )}
+                          </span>
+                          <span className="sb-switch" aria-hidden="true" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className={`sb-chips ${incomplete ? "missing" : ""}`}>
+                    {group.options.map((option) => {
+                      const on = chosen.some((item) => item.optionId === option.id);
+                      return (
+                        <button
+                          type="button"
+                          key={option.id}
+                          className={on ? "active" : ""}
+                          onClick={() => pick(group, option)}
+                        >
+                          {option.name}
+                          {option.priceDelta > 0 && (
+                            <em> +{money.format(option.priceDelta)}</em>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 {incomplete && <p className="sb-optgroup-error">Elige una opción.</p>}
               </section>
             );
