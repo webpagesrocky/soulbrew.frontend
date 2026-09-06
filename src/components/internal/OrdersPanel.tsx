@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { startOfDay, subscribeOrdersBetween } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
 import { cancelOrder, deleteOrder, payOrder } from "../../api/transactions";
+import { DashboardPanel } from "./DashboardPanel";
 import { ManualOrder } from "./ManualOrder";
 import type { Order, OrderStatus, PaymentMethod, User } from "../../types";
 
@@ -19,6 +20,7 @@ export function OrdersPanel({ user }: { user: User }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [view, setView] = useState<"orders" | "summary">("summary");
 
   // Este panel es la operación del día: sólo trae los pedidos de hoy. Los de
   // días anteriores viven en Historial, para que la barra no tenga que
@@ -85,6 +87,26 @@ export function OrdersPanel({ user }: { user: User }) {
     }
   }
 
+  // El resumen del día vive aquí dentro y no como pestaña aparte: es la misma
+  // información de esta pantalla, contada de otra forma.
+  if (view === "summary") {
+    return (
+      <section className="reference-panel">
+        <div className="panel-heading reference-heading-row">
+          <div className="reference-heading">
+            <h1>Resumen de hoy</h1>
+            <p>Cómo va el día. El detalle está en Pedidos.</p>
+          </div>
+          <div className="segmented">
+            <button onClick={() => setView("orders")}>Pedidos</button>
+            <button className="active">Resumen</button>
+          </div>
+        </div>
+        <DashboardPanel onViewOrders={() => setView("orders")} />
+      </section>
+    );
+  }
+
   return (
     <section className="reference-panel">
       <div className="panel-heading reference-heading-row">
@@ -96,6 +118,10 @@ export function OrdersPanel({ user }: { user: User }) {
           <button className="reference-primary new-order-btn" onClick={() => setCreating(true)}>
             + Nuevo pedido
           </button>
+        </div>
+        <div className="segmented view-segmented">
+          <button onClick={() => setView("summary")}>Resumen</button>
+          <button className="active">Pedidos</button>
         </div>
         <div className="segmented">
           {(["PENDING", "PAID", "CANCELLED", ""] as const).map((value) => (
@@ -128,13 +154,27 @@ export function OrdersPanel({ user }: { user: User }) {
               <p className="order-reward">🎉 Café de regalo: cumple 10 visitas</p>
             )}
             <div className="order-items">
-              {order.items.map((item) => (
-                <p key={item.productId}>
-                  <span>
-                    {item.quantity} × {item.productName}
-                  </span>
-                  <span>{money.format(item.subtotal)}</span>
-                </p>
+              {order.items.map((item, index) => (
+                // La clave lleva el índice: el mismo producto puede repetirse
+                // con personalizaciones distintas dentro de una orden.
+                <div key={`${item.productId}-${index}`}>
+                  <p>
+                    <span>
+                      {item.quantity} × {item.productName}
+                    </span>
+                    <span>{money.format(item.subtotal)}</span>
+                  </p>
+                  {item.options.length > 0 && (
+                    <ul className="order-item-options">
+                      {item.options.map((option) => (
+                        <li key={option.optionId}>
+                          {option.groupName}: <strong>{option.optionName}</strong>
+                          {option.priceDelta > 0 && ` (+${money.format(option.priceDelta)})`}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               ))}
             </div>
             <div className="order-total">

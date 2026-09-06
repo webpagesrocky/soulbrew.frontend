@@ -120,14 +120,11 @@ export function OptionGroupsPanel() {
   }
 
   return (
-    <section className="reference-panel">
-      <div className="reference-heading">
-        <h1>Personalizaciones</h1>
-        <p>
-          Tipos de leche, cold foams, endulzantes, temperaturas y extras. Cada producto elige
-          después cuáles ofrece, desde Menú → Editar.
-        </p>
-      </div>
+    <>
+      <p className="panel-lead">
+        Tipos de leche, cold foams, endulzantes, temperaturas y extras. Cada producto elige después
+        cuáles ofrece, desde la pestaña Productos → Editar.
+      </p>
 
       {error && <div className="notice error">{error}</div>}
       {message && <div className="notice success">{message}</div>}
@@ -201,7 +198,7 @@ export function OptionGroupsPanel() {
           onError={setError}
         />
       )}
-    </section>
+    </>
   );
 }
 

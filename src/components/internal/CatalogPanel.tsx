@@ -12,6 +12,7 @@ import { errorMessage } from "../../api/errors";
 import type { Category, Product, Supply, User } from "../../types";
 import { CategoryManager } from "./CategoryManager";
 import { ImageField } from "./ImageField";
+import { OptionGroupsPanel } from "./OptionGroupsPanel";
 import { ProductEditor } from "./ProductEditor";
 import { RecipeEditor } from "./RecipeEditor";
 
@@ -27,6 +28,7 @@ export function CatalogPanel({ user }: { user: User }) {
   const [editing, setEditing] = useState<Product | null>(null);
   const [supplies, setSupplies] = useState<Supply[]>([]);
   const [recipeOf, setRecipeOf] = useState<Product | null>(null);
+  const [view, setView] = useState<"products" | "options">("products");
 
   useEffect(
     () =>
@@ -125,11 +127,37 @@ export function CatalogPanel({ user }: { user: User }) {
     }
   }
 
+  // Las personalizaciones viven aquí dentro y no como pestaña aparte: son
+  // parte de armar la carta, igual que el inventario vive dentro de Reportes.
+  if (view === "options") {
+    return (
+      <section className="reference-panel">
+        <div className="panel-heading reference-heading-row">
+          <div className="reference-heading">
+            <h1>Administrar menú</h1>
+            <p>Los cambios se reflejan automáticamente en el menú público.</p>
+          </div>
+          <div className="segmented">
+            <button onClick={() => setView("products")}>Productos</button>
+            <button className="active">Personalizaciones</button>
+          </div>
+        </div>
+        <OptionGroupsPanel />
+      </section>
+    );
+  }
+
   return (
     <section className="reference-panel">
-      <div className="reference-heading">
-        <h1>Administrar menú</h1>
-        <p>Los cambios se reflejan automáticamente en el menú público.</p>
+      <div className="panel-heading reference-heading-row">
+        <div className="reference-heading">
+          <h1>Administrar menú</h1>
+          <p>Los cambios se reflejan automáticamente en el menú público.</p>
+        </div>
+        <div className="segmented">
+          <button className="active">Productos</button>
+          <button onClick={() => setView("options")}>Personalizaciones</button>
+        </div>
       </div>
       {error && <div className="notice error">{error}</div>}
       {message && <div className="notice success">{message}</div>}

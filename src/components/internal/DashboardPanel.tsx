@@ -55,11 +55,7 @@ export function DashboardPanel({ onViewOrders }: { onViewOrders: () => void }) {
   ];
 
   return (
-    <section className="reference-panel">
-      <div className="reference-heading">
-        <h1>Dashboard</h1>
-        <p>Resumen de hoy, actualizado con los pedidos registrados.</p>
-      </div>
+    <>
       {error && <div className="notice error">{error}</div>}
       <div className="metric-grid">
         {cards.map((card) => (
@@ -125,6 +121,6 @@ export function DashboardPanel({ onViewOrders }: { onViewOrders: () => void }) {
           )}
         </article>
       </div>
-    </section>
+    </>
   );
 }
