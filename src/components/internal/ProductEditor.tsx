@@ -6,6 +6,7 @@ import {
   updateProduct,
 } from "../../api/collections";
 import { effectiveRecipe } from "../../api/costing";
+import { resolveOptionGroups } from "../../api/options";
 import { errorMessage } from "../../api/errors";
 import type { Category, OptionGroup, Product, ProductOptionGroup } from "../../types";
 import { ImageField } from "./ImageField";
@@ -26,6 +27,9 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
 
   // Con receta, el costo se calcula de los insumos y el campo manual sobra.
   const hasRecipe = effectiveRecipe(product, categories).length > 0;
+
+  /** Lo que ofrecería sin lista propia, para poder enseñárselo a quien edita. */
+  const inherited = resolveOptionGroups({ ...product, optionGroups: [] }, groups);
 
   useEffect(
     () =>
@@ -197,10 +201,18 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
         </label>
 
         <label>Personalizaciones</label>
-        <p className="editor-note">
-          Qué puede elegir el cliente al pedirlo. Los grupos se arman en Personalizaciones; aquí
-          decides cuáles le tocan a este producto y con qué opciones.
-        </p>
+        {assigned.length === 0 ? (
+          <div className="notice success">
+            Hereda las de su categoría:{" "}
+            <strong>{inherited.map((group) => group.name).join(", ") || "ninguna"}</strong>. Marca
+            algo abajo sólo si este producto necesita algo distinto.
+          </div>
+        ) : (
+          <p className="editor-note">
+            Tiene su propia lista, así que ignora la de su categoría. Desmarca todo para volver a
+            heredarla.
+          </p>
+        )}
         <div className="link-products">
           {groups.map((group) => {
             const entry = assigned.find((item) => item.groupId === group.id);

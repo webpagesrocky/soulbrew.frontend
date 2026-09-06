@@ -6,6 +6,7 @@ import {
   subscribePublicProducts,
 } from "../api/collections";
 import { errorMessage } from "../api/errors";
+import { resolveOptionGroups } from "../api/options";
 import { createPublicOrder, type LoyaltyResult } from "../api/transactions";
 import { Icon } from "../components/Icon";
 import { LoyaltyCard } from "../components/LoyaltyCard";
@@ -123,11 +124,7 @@ export function PublicView() {
    * derecho al carrito: no tiene caso enseñar una ventana sin nada que elegir.
    */
   function openProduct(product: Product) {
-    const hasOptions = product.optionGroups.some((assigned) => {
-      const group = groups.find((item) => item.id === assigned.groupId);
-      return group?.active && group.options.some((option) => option.active);
-    });
-    if (!hasOptions) return addLine(product.id, [], 1);
+    if (!resolveOptionGroups(product, groups).length) return addLine(product.id, [], 1);
     setCustomizing({ product, line: null });
   }
 
@@ -360,7 +357,7 @@ export function PublicView() {
                           ))}
                         </ul>
                       )}
-                      {product.optionGroups.length > 0 && (
+                      {resolveOptionGroups(product, groups).length > 0 && (
                         <button
                           type="button"
                           className="sb-line-edit"

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import {
   createOptionGroup,
+  subscribeCategories,
   deleteOptionGroup,
   subscribeOptionGroups,
   updateOptionGroup,
 } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
-import type { OptionChoice, OptionGroup } from "../../types";
+import type { Category, OptionChoice, OptionGroup } from "../../types";
 import { ImageField } from "./ImageField";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -29,6 +30,7 @@ function newOptionId() {
  */
 export function OptionGroupsPanel() {
   const [groups, setGroups] = useState<OptionGroup[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [editing, setEditing] = useState<OptionGroup | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -38,6 +40,15 @@ export function OptionGroupsPanel() {
     () =>
       subscribeOptionGroups(setGroups, (reason) =>
         setError(errorMessage(reason, "No se pudieron cargar las personalizaciones")),
+      ),
+    [],
+  );
+
+  useEffect(
+    () =>
+      subscribeCategories(
+        (list) => setCategories(list.filter((item) => item.active)),
+        (reason) => setError(errorMessage(reason, "No se pudieron cargar las categorías")),
       ),
     [],
   );
@@ -54,10 +65,12 @@ export function OptionGroupsPanel() {
         required: data.get("required") === "on",
         order: groups.length + 1,
         active: true,
+        // Arranca aplicando a todas; se acota al abrirlo.
+        categoryIds: [],
         options: [],
       });
       form.reset();
-      setMessage("Grupo creado. Ábrelo para agregarle opciones.");
+      setMessage("Grupo creado. Ábrelo para elegir categorías y agregarle opciones.");
       setError("");
     } catch (reason) {
       setError(errorMessage(reason, "No se pudo crear el grupo"));
@@ -161,9 +174,14 @@ export function OptionGroupsPanel() {
                 <div>
                   <strong>{group.name}</strong>
                   <small>
-                    {group.selection === "SINGLE" ? "Elige una" : "Elige varias"}
-                    {group.required ? " · obligatorio" : " · opcional"} ·{" "}
-                    {group.options.filter((option) => option.active).length} opciones
+                    {group.categoryIds.length === 0
+                      ? "Todas las categorías"
+                      : group.categoryIds
+                          .map((id) => categories.find((item) => item.id === id)?.name ?? id)
+                          .join(", ")}{" "}
+                    · {group.options.filter((option) => option.active).length} opciones ·{" "}
+                    {group.selection === "SINGLE" ? "elige una" : "elige varias"}
+                    {group.required && ", obligatorio"}
                   </small>
                 </div>
                 <button
@@ -191,6 +209,7 @@ export function OptionGroupsPanel() {
       {editing && (
         <GroupEditor
           group={editing}
+          categories={categories}
           busy={busy}
           onClose={() => setEditing(null)}
           onSave={save}
@@ -204,6 +223,7 @@ export function OptionGroupsPanel() {
 
 interface EditorProps {
   group: OptionGroup;
+  categories: Category[];
   busy: boolean;
   onClose: () => void;
   onSave: (group: OptionGroup) => Promise<void>;
@@ -212,8 +232,9 @@ interface EditorProps {
 }
 
 /** Edición de un grupo y de sus opciones, con nombre, recargo y foto. */
-function GroupEditor({ group, busy, onClose, onSave, onDelete, onError }: EditorProps) {
+function GroupEditor({ group, categories, busy, onClose, onSave, onDelete, onError }: EditorProps) {
   const [draft, setDraft] = useState<OptionGroup>(group);
+  const categoryIds = categories.map((category) => category.id);
 
   function patch(changes: Partial<OptionGroup>) {
     setDraft((current) => ({ ...current, ...changes }));
@@ -290,6 +311,47 @@ function GroupEditor({ group, busy, onClose, onSave, onDelete, onError }: Editor
           />
           <span>Obligatorio: el cliente tiene que elegir</span>
         </label>
+
+        <label>¿En qué categorías aparece?</label>
+        <p className="editor-note">
+          Todos los productos de esas categorías lo ofrecen sin que tengas que marcarlos uno por
+          uno. Si un producto suelto necesita algo distinto, se le pone su propia lista desde
+          Productos → Editar.
+        </p>
+        <div className="link-products">
+          <label className="link-product link-group-head">
+            <input
+              type="checkbox"
+              checked={draft.categoryIds.length === 0}
+              onChange={(event) => patch({ categoryIds: event.target.checked ? [] : categoryIds })}
+            />
+            <span>
+              <strong>Todas las categorías</strong>
+            </span>
+          </label>
+          {categories.map((category) => (
+            <label className="link-product link-child" key={category.id}>
+              <input
+                type="checkbox"
+                checked={draft.categoryIds.length === 0 || draft.categoryIds.includes(category.id)}
+                // Sin ninguna marcada volvería a significar "todas", que no es
+                // lo que se pidió: se deja al menos una.
+                disabled={draft.categoryIds.length === 1 && draft.categoryIds.includes(category.id)}
+                onChange={(event) => {
+                  const current = draft.categoryIds.length ? draft.categoryIds : categoryIds;
+                  patch({
+                    categoryIds: event.target.checked
+                      ? [...current, category.id]
+                      : current.filter((id) => id !== category.id),
+                  });
+                }}
+              />
+              <span>
+                {category.emoji} {category.name}
+              </span>
+            </label>
+          ))}
+        </div>
 
         <div className="option-list">
           {draft.options.map((option, index) => (

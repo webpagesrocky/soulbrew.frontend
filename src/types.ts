@@ -60,8 +60,8 @@ export interface Product {
    */
   recipe: RecipeItem[];
   /**
-   * Grupos de personalización que le aplican. Vacío = se agrega al carrito
-   * directo, sin ventana de opciones.
+   * Personalización propia, que gana sobre la de su categoría. Vacío = usa la
+   * que corresponda a su categoría, igual que con la receta.
    */
   optionGroups: ProductOptionGroup[];
   stock: number;
@@ -101,6 +101,12 @@ export interface OptionGroup {
   required: boolean;
   order: number;
   active: boolean;
+  /**
+   * Categorías a las que aplica. Vacío = a todas. Es la forma rápida de
+   * activarlo: con 30 productos, decir "el cold foam va en Matcha, Café y
+   * Chai" evita marcarlo treinta veces.
+   */
+  categoryIds: ProductCategory[];
   options: OptionChoice[];
 }
 

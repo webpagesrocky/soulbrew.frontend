@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { resolveOptionGroups } from "../api/options";
 import type { ChosenOption, OptionChoice, OptionGroup, Product } from "../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -52,24 +53,7 @@ export function ProductCustomizer({
   const [quantity, setQuantity] = useState(initialQuantity);
   const [showErrors, setShowErrors] = useState(false);
 
-  /**
-   * Los grupos que aplican, en el orden del panel, con sólo las opciones que
-   * el producto ofrece y que siguen activas.
-   */
-  const applicable = useMemo(() => {
-    return product.optionGroups
-      .map((assigned) => {
-        const group = groups.find((item) => item.id === assigned.groupId);
-        if (!group || !group.active) return null;
-        const options = group.options.filter(
-          (option) =>
-            option.active &&
-            (assigned.optionIds.length === 0 || assigned.optionIds.includes(option.id)),
-        );
-        return options.length ? { ...group, options } : null;
-      })
-      .filter((group): group is OptionGroup => group !== null);
-  }, [product.optionGroups, groups]);
+  const applicable = useMemo(() => resolveOptionGroups(product, groups), [product, groups]);
 
   const missing = applicable.filter(
     (group) => group.required && !chosen.some((item) => item.groupId === group.id),

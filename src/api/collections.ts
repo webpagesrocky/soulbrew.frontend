@@ -585,6 +585,9 @@ function toOptionGroup(snapshot: Snapshot): OptionGroup {
     required: Boolean(data.required),
     order: data.order ?? 0,
     active: Boolean(data.active),
+    // Vacío en los grupos creados antes de poder acotarlos por categoría:
+    // esos siguen aplicando a todas, que es como venían funcionando.
+    categoryIds: data.categoryIds ?? [],
     options: data.options ?? [],
   };
 }
