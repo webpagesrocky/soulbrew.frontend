@@ -3,11 +3,19 @@ import {
   createOptionGroup,
   subscribeCategories,
   deleteOptionGroup,
+  setOptionImage,
   subscribeOptionGroups,
+  subscribeOptionImages,
   updateOptionGroup,
 } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
-import type { Category, OptionChoice, OptionGroup } from "../../types";
+import type {
+  Category,
+  OptionChoice,
+  OptionGroup,
+  OptionImage,
+  ProductCategory,
+} from "../../types";
 import { ImageField } from "./ImageField";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -31,6 +39,7 @@ function newOptionId() {
 export function OptionGroupsPanel() {
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [images, setImages] = useState<OptionImage[]>([]);
   const [editing, setEditing] = useState<OptionGroup | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -49,6 +58,14 @@ export function OptionGroupsPanel() {
       subscribeCategories(
         (list) => setCategories(list.filter((item) => item.active)),
         (reason) => setError(errorMessage(reason, "No se pudieron cargar las categorías")),
+      ),
+    [],
+  );
+
+  useEffect(
+    () =>
+      subscribeOptionImages(setImages, (reason) =>
+        setError(errorMessage(reason, "No se pudieron cargar las fotos")),
       ),
     [],
   );
@@ -210,6 +227,7 @@ export function OptionGroupsPanel() {
         <GroupEditor
           group={editing}
           categories={categories}
+          images={images}
           busy={busy}
           onClose={() => setEditing(null)}
           onSave={save}
@@ -224,6 +242,7 @@ export function OptionGroupsPanel() {
 interface EditorProps {
   group: OptionGroup;
   categories: Category[];
+  images: OptionImage[];
   busy: boolean;
   onClose: () => void;
   onSave: (group: OptionGroup) => Promise<void>;
@@ -232,9 +251,35 @@ interface EditorProps {
 }
 
 /** Edición de un grupo y de sus opciones, con nombre, recargo y foto. */
-function GroupEditor({ group, categories, busy, onClose, onSave, onDelete, onError }: EditorProps) {
+function GroupEditor({ group, categories, images, busy, onClose, onSave, onDelete, onError }: EditorProps) {
   const [draft, setDraft] = useState<OptionGroup>(group);
   const categoryIds = categories.map((category) => category.id);
+
+  /** Las categorías donde este grupo se ofrece: sin lista propia, son todas. */
+  const scope = draft.categoryIds.length
+    ? categories.filter((category) => draft.categoryIds.includes(category.id))
+    : categories;
+
+  function imageFor(optionId: string, categoryId: ProductCategory) {
+    return (
+      images.find(
+        (image) =>
+          image.groupId === draft.id &&
+          image.optionId === optionId &&
+          image.categoryId === categoryId,
+      )?.imageUrl ?? null
+    );
+  }
+
+  // Se guarda al momento y no con el resto del grupo: son documentos aparte
+  // justamente para que su peso no se acumule en el del grupo.
+  async function saveImage(optionId: string, categoryId: ProductCategory, value: string | null) {
+    try {
+      await setOptionImage(draft.id, optionId, categoryId, value);
+    } catch (reason) {
+      onError(errorMessage(reason, "No se pudo guardar la foto"));
+    }
+  }
 
   function patch(changes: Partial<OptionGroup>) {
     setDraft((current) => ({ ...current, ...changes }));
@@ -406,14 +451,35 @@ function GroupEditor({ group, categories, busy, onClose, onSave, onDelete, onErr
                 </div>
               </div>
               <div className="option-image">
-                <ImageField
-                  value={option.imageUrl}
-                  onChange={(value) => patchOption(option.id, { imageUrl: value })}
-                  onError={onError}
-                />
+                <div className="option-photo">
+                  <span>Para cualquier categoría</span>
+                  <ImageField
+                    value={option.imageUrl}
+                    onChange={(value) => patchOption(option.id, { imageUrl: value })}
+                    onError={onError}
+                  />
+                </div>
+
+                {/* Una foto por categoría, porque el mismo lotus no se ve igual
+                    sobre un matcha que sobre un latte. Se guardan al momento,
+                    aparte del grupo: cada una pesa decenas de KB y juntas no
+                    cabrían en un solo documento de Firestore. */}
+                {scope.map((category) => (
+                  <div className="option-photo" key={category.id}>
+                    <span>
+                      Sólo en {category.emoji} {category.name}
+                    </span>
+                    <ImageField
+                      value={imageFor(option.id, category.id)}
+                      onChange={(value) => void saveImage(option.id, category.id, value)}
+                      onError={onError}
+                    />
+                  </div>
+                ))}
+
                 <small>
-                  Opcional. Si la pones, la foto del producto cambia a ésta cuando el cliente elige
-                  {option.name ? ` "${option.name}"` : " esta opción"}.
+                  Todas opcionales. Se usa la de la categoría si existe; si no, la general; y si no
+                  hay ninguna, se queda la foto del producto.
                 </small>
               </div>
             </div>

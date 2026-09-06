@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
-import { resolveOptionGroups } from "../api/options";
-import type { ChosenOption, OptionChoice, OptionGroup, Product } from "../types";
+import { optionImageFor, resolveOptionGroups } from "../api/options";
+import type { ChosenOption, OptionChoice, OptionGroup, OptionImage, Product } from "../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
 interface Props {
   product: Product;
   groups: OptionGroup[];
+  /** Fotos por categoría, para que la imagen cambie según la bebida. */
+  images: OptionImage[];
   /** Selección con la que abre, para poder editar algo que ya está en el carrito. */
   initial?: ChosenOption[];
   initialQuantity?: number;
@@ -34,6 +36,7 @@ type Picked = ChosenOption & { imageUrl: string | null };
 export function ProductCustomizer({
   product,
   groups,
+  images,
   initial = [],
   initialQuantity = 1,
   onClose,
@@ -41,13 +44,18 @@ export function ProductCustomizer({
 }: Props) {
   const [chosen, setChosen] = useState<Picked[]>(() =>
     // Al reabrir algo del carrito se recupera la foto de cada opción elegida,
-    // que la orden no guarda, buscándola en su grupo.
+    // que la orden no guarda, buscándola por su grupo y la categoría.
     initial.map((item) => ({
       ...item,
-      imageUrl:
+      imageUrl: optionImageFor(
+        item.groupId,
+        item.optionId,
         groups
           .find((group) => group.id === item.groupId)
           ?.options.find((option) => option.id === item.optionId)?.imageUrl ?? null,
+        product.category,
+        images,
+      ),
     })),
   );
   const [quantity, setQuantity] = useState(initialQuantity);
@@ -75,7 +83,13 @@ export function ProductCustomizer({
       optionId: option.id,
       optionName: option.name,
       priceDelta: option.priceDelta,
-      imageUrl: option.imageUrl,
+      imageUrl: optionImageFor(
+        group.id,
+        option.id,
+        option.imageUrl,
+        product.category,
+        images,
+      ),
     };
 
     setChosen((current) => {

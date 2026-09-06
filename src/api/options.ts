@@ -1,4 +1,27 @@
-import type { OptionGroup, Product } from "../types";
+import type { OptionGroup, OptionImage, Product, ProductCategory } from "../types";
+
+/**
+ * La foto que le toca a una opción en una categoría concreta.
+ *
+ * Primero la específica de esa categoría (el lotus sobre matcha), luego la
+ * general de la opción, y si no hay ninguna se devuelve null para que la
+ * ventana se quede con la foto del producto.
+ */
+export function optionImageFor(
+  groupId: string,
+  optionId: string,
+  optionDefault: string | null,
+  categoryId: ProductCategory,
+  images: OptionImage[],
+): string | null {
+  const specific = images.find(
+    (image) =>
+      image.groupId === groupId &&
+      image.optionId === optionId &&
+      image.categoryId === categoryId,
+  );
+  return specific?.imageUrl ?? optionDefault ?? null;
+}
 
 /**
  * Qué puede personalizar un producto.

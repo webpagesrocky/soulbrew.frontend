@@ -105,7 +105,9 @@ small { color: #6d746e; }
    ni la foto ni el título. */
 .sb-product-body { padding: 3.4rem 1.1rem 1.1rem; }
 .sb-product-row { display: flex; justify-content: space-between; align-items: start; gap: .6rem; }
-.sb-product-row h3 { margin: 0; font-family: Georgia, serif; font-weight: 500; font-size: 1.05rem; }
+/* Sans, igual que la ventana de personalización: los nombres largos con el
+   cold foam entre paréntesis se leen mal en serif. */
+.sb-product-row h3 { margin: 0; font-family: inherit; font-weight: 700; font-size: 1rem; letter-spacing: -.01em; line-height: 1.3; }
 .sb-product-row strong { color: var(--sb-price); white-space: nowrap; }
 .sb-product-body > p { margin: .4rem 0 0; color: var(--sb-muted); font-size: .85rem; line-height: 1.45; }
 .sb-stock-label { display: inline-block; margin-top: .6rem; color: #b1492f; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
@@ -925,6 +927,10 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .option-actions > button:not(.avail-toggle):not(.category-delete) { border: 1px solid #ddcabb; border-radius: 7px; padding: 3px 8px; background: #fff; font-size: 11px; color: #67442f; }
 .option-image { margin-top: 8px; }
 .option-image small { display: block; margin-top: 4px; color: #9b765c; font-size: 11px; }
+/* Una foto general y luego una por categoría: la misma opción no se ve igual
+   sobre un matcha que sobre un latte. */
+.option-photo + .option-photo { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--ref-border); }
+.option-photo > span { display: block; margin-bottom: 4px; color: #6b4226; font-size: 11.5px; font-weight: 650; }
 
 /* Alta de insumo: una frase por renglón ("Cada paquete trae [12] piezas"),
    para que no queden tres casillas seguidas sin decir cuál es cuál. */

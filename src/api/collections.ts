@@ -25,6 +25,7 @@ import type {
   Customer,
   InventoryMovement,
   OptionGroup,
+  OptionImage,
   Order,
   OrderItem,
   OrderStatus,
@@ -598,6 +599,48 @@ export function subscribeOptionGroups(
   onError: (error: Error) => void,
 ) {
   return subscribe("optionGroups", [orderBy("order")], toOptionGroup, onData, onError);
+}
+
+/**
+ * Fotos de opción por categoría. Van en su propia colección porque cada una
+ * pesa decenas de KB y no caben todas dentro del documento del grupo.
+ */
+export function subscribeOptionImages(
+  onData: (images: OptionImage[]) => void,
+  onError: (error: Error) => void,
+) {
+  return subscribe(
+    "optionImages",
+    [],
+    (snapshot) => {
+      const data = snapshot.data();
+      return {
+        id: snapshot.id,
+        groupId: data.groupId,
+        optionId: data.optionId,
+        categoryId: data.categoryId,
+        imageUrl: data.imageUrl,
+      };
+    },
+    onData,
+    onError,
+  );
+}
+
+/** El id se arma con las tres piezas para que guardar dos veces no duplique. */
+function optionImageId(groupId: string, optionId: string, categoryId: string) {
+  return `${groupId}__${optionId}__${categoryId}`;
+}
+
+export async function setOptionImage(
+  groupId: string,
+  optionId: string,
+  categoryId: string,
+  imageUrl: string | null,
+) {
+  const ref = doc(db, "optionImages", optionImageId(groupId, optionId, categoryId));
+  if (!imageUrl) return deleteDoc(ref);
+  await setDoc(ref, { groupId, optionId, categoryId, imageUrl });
 }
 
 export type OptionGroupInput = Omit<OptionGroup, "id">;

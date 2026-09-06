@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   subscribeCategories,
   subscribeOptionGroups,
+  subscribeOptionImages,
   subscribePublicProducts,
 } from "../api/collections";
 import { errorMessage } from "../api/errors";
@@ -11,7 +12,7 @@ import { createPublicOrder, type LoyaltyResult } from "../api/transactions";
 import { Icon } from "../components/Icon";
 import { LoyaltyCard } from "../components/LoyaltyCard";
 import { ProductCustomizer } from "../components/ProductCustomizer";
-import type { ChosenOption, Category, OptionGroup, Product, ProductCategory } from "../types";
+import type { ChosenOption, Category, OptionGroup, OptionImage, Product, ProductCategory } from "../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
@@ -44,6 +45,7 @@ export function PublicView() {
   const [category, setCategory] = useState<ProductCategory | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [groups, setGroups] = useState<OptionGroup[]>([]);
+  const [optionImages, setOptionImages] = useState<OptionImage[]>([]);
   const [customizing, setCustomizing] = useState<{ product: Product; line: CartLine | null } | null>(
     null,
   );
@@ -89,6 +91,11 @@ export function PublicView() {
   useEffect(
     () =>
       subscribeOptionGroups(setGroups, () => setGroups([])),
+    [],
+  );
+
+  useEffect(
+    () => subscribeOptionImages(setOptionImages, () => setOptionImages([])),
     [],
   );
 
@@ -431,6 +438,7 @@ export function PublicView() {
         <ProductCustomizer
           product={customizing.product}
           groups={groups}
+          images={optionImages}
           initial={customizing.line?.options ?? []}
           initialQuantity={customizing.line?.quantity ?? 1}
           onClose={() => setCustomizing(null)}

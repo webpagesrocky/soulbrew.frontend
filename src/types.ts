@@ -83,8 +83,28 @@ export interface OptionChoice {
   name: string;
   /** Lo que suma al precio del producto. 0 si no cobra nada. */
   priceDelta: number;
+  /**
+   * Foto por omisión de la opción, para cuando sirve igual en cualquier
+   * categoría. Las que cambian según la bebida viven en `optionImages`.
+   */
   imageUrl: string | null;
   active: boolean;
+}
+
+/**
+ * Foto de una opción para una categoría concreta: el lotus se ve distinto
+ * sobre un matcha que sobre un latte.
+ *
+ * Vive en su propia colección y no dentro del grupo porque cada foto pesa
+ * decenas de KB y un documento de Firestore tope en 1 MiB: seis cold foams por
+ * tres categorías dentro del mismo documento lo reventarían.
+ */
+export interface OptionImage {
+  id: string;
+  groupId: string;
+  optionId: string;
+  categoryId: ProductCategory;
+  imageUrl: string;
 }
 
 /**
