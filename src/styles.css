@@ -159,7 +159,13 @@ small { color: #6d746e; }
 @keyframes sb-fade { from { opacity: .35; } to { opacity: 1; } }
 .sb-customizer-placeholder { font-size: 3rem; }
 .sb-customizer-body { flex: 1 1 auto; overflow-y: auto; padding: 1.15rem 1.25rem .5rem; }
-.sb-customizer-body h2 { margin: 0; font-family: Georgia, serif; font-weight: 500; font-size: 1.5rem; }
+/* Sin serif aquí: el nombre del producto puede ser largo ("Avellana latte (SIN
+   COLD FOAM)") y en dos renglones de Georgia se come la pantalla. Hay que
+   nombrar la familia porque la regla global de h1/h2/h3 la pone en Georgia.
+   La serif se queda para los títulos cortos de la portada. */
+.sb-customizer-body h2,
+.sb-optgroup h3 { font-family: inherit; }
+.sb-customizer-body h2 { margin: 0; font-size: 1.15rem; font-weight: 750; letter-spacing: -.01em; line-height: 1.3; }
 .sb-customizer-desc { margin: .3rem 0 1.1rem; color: var(--sb-muted); font-size: .85rem; line-height: 1.45; }
 
 .sb-optgroup { margin-bottom: 1.25rem; }

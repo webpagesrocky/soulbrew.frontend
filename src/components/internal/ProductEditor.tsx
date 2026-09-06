@@ -194,6 +194,11 @@ export function ProductEditor({ product, categories, onClose, onSaved, onError }
 
         <label>Imagen</label>
         <ImageField value={image} onChange={setImage} onError={onError} />
+        <p className="editor-note">
+          Con <strong>Reencuadrar</strong> mueves y acercas la foto para elegir qué parte se ve. Lo
+          que encuadres ahí es exactamente lo que aparece en el menú y en la ventana de
+          personalización.
+        </p>
 
         <label className="editor-check">
           <input type="checkbox" name="active" defaultChecked={product.active} />
