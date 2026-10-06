@@ -305,6 +305,14 @@ small { color: #6d746e; }
 .cash-amount { display: block; font: 700 3rem var(--admin-font); margin: 1.5rem 0 .35rem; }
 .dark-card input { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); color: white; }
 .light-button { background: var(--sage); color: var(--forest); }
+/* Aviso bajo el campo de cierre: el conteo va con el fondo incluido. */
+.cash-hint { display: block; margin: -.35rem 0 .9rem; color: #b7c3b9; font-size: 11.5px; line-height: 1.4; }
+/* Cabecera plegable del historial: el título entero es el botón. */
+.history-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1rem; border: 0; background: none; padding: 0; text-align: left; color: inherit; }
+.history-toggle .eyebrow, .history-toggle h3 { margin: 0; }
+.history-toggle h3 { margin-top: .35rem; }
+.history-chevron { flex: 0 0 auto; color: var(--forest); font-size: 18px; transition: transform .18s ease; }
+.history-chevron.open { transform: rotate(180deg); }
 .history-list > div { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding: .9rem 0; }
 .history-list span { display: flex; flex-direction: column; gap: .3rem; }
 .history-list span:last-child { align-items: end; }
@@ -749,6 +757,9 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 /* Borrado en filas de historial */
 .row-delete { border: 0; border-radius: 50%; width: 22px; height: 22px; margin-left: 10px; background: #f5ece8; color: #b2452a; font-size: 10px; flex: 0 0 auto; }
 .row-delete:disabled { opacity: .4; cursor: not-allowed; }
+/* Volver a abrir el recibo de un corte ya cerrado. */
+.session-receipt { flex: 0 0 auto; margin-left: 12px; border: 1px solid var(--line); border-radius: 7px; background: transparent; padding: 5px 11px; color: var(--forest); font-size: 11px; font-weight: 750; }
+.session-receipt:hover { background: #f3f1ec; border-color: var(--forest); }
 .session-delete { flex: 0 0 auto; margin-left: 12px; border: 1px solid #e6c4b8; border-radius: 7px; background: transparent; padding: 5px 11px; color: #b2452a; font-size: 11px; font-weight: 750; }
 .session-delete:hover:enabled { background: #fdf1ed; border-color: #b2452a; }
 .session-delete:disabled { opacity: .4; cursor: not-allowed; }

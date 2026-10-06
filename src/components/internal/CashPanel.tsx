@@ -27,6 +27,9 @@ export function CashPanel({ user }: { user: User }) {
   const [busy, setBusy] = useState(false);
   const [supplies, setSupplies] = useState<Supply[]>([]);
   const [waste, setWaste] = useState<WasteLine[]>([]);
+  // El historial se abre sólo si lo piden: en el día a día estorba y lo que
+  // importa es la caja de hoy, no los cortes de la semana pasada.
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(
     () =>
@@ -102,6 +105,34 @@ export function CashPanel({ user }: { user: User }) {
     }
   }
 
+  /**
+   * Vuelve a abrir el recibo de un corte ya cerrado, por si lo cerraron sin
+   * imprimirlo. La merma no se guarda en el corte, así que esa parte sale
+   * vacía: sólo aparece en el recibo del momento del cierre.
+   */
+  function showReceipt(session: CashSession) {
+    if (
+      session.closedAt == null ||
+      session.closingAmount == null ||
+      session.expectedAmount == null ||
+      session.differenceAmount == null ||
+      session.totals == null
+    ) {
+      return setError("Ese corte es viejo y no guardó el detalle del recibo.");
+    }
+    setReport({
+      userName: session.userName,
+      openedAt: session.openedAt,
+      closedAt: session.closedAt,
+      openingAmount: session.openingAmount,
+      closingAmount: session.closingAmount,
+      expectedAmount: session.expectedAmount,
+      differenceAmount: session.differenceAmount,
+      totals: session.totals,
+      waste: [],
+    });
+  }
+
   async function removeSession(session: CashSession) {
     const confirmed = window.confirm(
       `¿Borrar el corte de ${session.userName} del ` +
@@ -156,6 +187,13 @@ export function CashPanel({ user }: { user: User }) {
               onChange={(event) => setAmount(event.target.value)}
               required
             />
+            {/* Sin esta aclaración es fácil contar sólo lo vendido y sacar el
+                fondo aparte, y entonces el descuadre sale en falso. */}
+            {current && (
+              <small className="cash-hint">
+                Cuenta todo el cajón, incluido el fondo con el que abriste.
+              </small>
+            )}
             {current && (
               <WasteEditor supplies={supplies} lines={waste} onChange={setWaste} />
             )}
@@ -169,39 +207,62 @@ export function CashPanel({ user }: { user: User }) {
           </form>
         </article>
         <article className="feature-card">
-          <p className="eyebrow">Historial reciente</p>
-          <h3>Últimos cortes</h3>
-          <div className="history-list">
-            {sessions.map((session) => (
-              <div key={session.id}>
-                <span>
-                  <strong>{session.userName}</strong>
-                  <small>
-                    {session.openedAt ? session.openedAt.toLocaleDateString("es-MX") : "—"}
-                  </small>
-                </span>
-                <span>
-                  <b className={`status ${session.status.toLowerCase()}`}>{session.status}</b>
-                  <small>
-                    {session.closingAmount == null
-                      ? money.format(session.openingAmount)
-                      : money.format(session.closingAmount)}
-                  </small>
-                </span>
-                {user.role === "ADMIN" && session.status === "CLOSED" && (
-                  <button
-                    className="session-delete"
-                    disabled={busy}
-                    onClick={() => void removeSession(session)}
-                    aria-label={`Borrar corte de ${session.userName}`}
-                  >
-                    Borrar
-                  </button>
-                )}
-              </div>
-            ))}
-            {!sessions.length && <p className="muted">Todavía no hay cortes.</p>}
-          </div>
+          <button
+            type="button"
+            className="history-toggle"
+            onClick={() => setShowHistory((open) => !open)}
+            aria-expanded={showHistory}
+          >
+            <span>
+              <p className="eyebrow">Historial reciente</p>
+              <h3>Últimos cortes ({sessions.length})</h3>
+            </span>
+            <span className={`history-chevron ${showHistory ? "open" : ""}`} aria-hidden="true">
+              ▾
+            </span>
+          </button>
+          {showHistory && (
+            <div className="history-list">
+              {sessions.map((session) => (
+                <div key={session.id}>
+                  <span>
+                    <strong>{session.userName}</strong>
+                    <small>
+                      {session.openedAt ? session.openedAt.toLocaleDateString("es-MX") : "—"}
+                    </small>
+                  </span>
+                  <span>
+                    <b className={`status ${session.status.toLowerCase()}`}>{session.status}</b>
+                    <small>
+                      {session.closingAmount == null
+                        ? money.format(session.openingAmount)
+                        : money.format(session.closingAmount)}
+                    </small>
+                  </span>
+                  {session.status === "CLOSED" && (
+                    <button
+                      className="session-receipt"
+                      onClick={() => showReceipt(session)}
+                      aria-label={`Ver recibo del corte de ${session.userName}`}
+                    >
+                      Ver recibo
+                    </button>
+                  )}
+                  {user.role === "ADMIN" && session.status === "CLOSED" && (
+                    <button
+                      className="session-delete"
+                      disabled={busy}
+                      onClick={() => void removeSession(session)}
+                      aria-label={`Borrar corte de ${session.userName}`}
+                    >
+                      Borrar
+                    </button>
+                  )}
+                </div>
+              ))}
+              {!sessions.length && <p className="muted">Todavía no hay cortes.</p>}
+            </div>
+          )}
         </article>
       </div>
 
