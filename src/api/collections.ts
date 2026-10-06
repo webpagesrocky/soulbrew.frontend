@@ -209,21 +209,30 @@ export function startOfDay(date = new Date()): Date {
   return copy;
 }
 
+/** Tope de pedidos por consulta, si quien llama no pide otro. */
+export const ORDERS_PAGE_SIZE = 500;
+
 /**
  * Pedidos dentro de un rango. Lo usan tanto el panel del día como el historial
  * y el reporte semanal, que sólo cambian los extremos del rango.
+ *
+ * El tope corta por el extremo viejo (la consulta va de nuevo a viejo), así
+ * que quien pida un rango largo tiene que comparar cuántos pedidos le
+ * llegaron contra el tope: si son iguales, falta cola y hay que decirlo en
+ * pantalla en vez de enseñar un historial incompleto como si estuviera entero.
  */
 export function subscribeOrdersBetween(
   from: Date,
   to: Date | null,
   onData: (orders: Order[]) => void,
   onError: (error: Error) => void,
+  max = ORDERS_PAGE_SIZE,
 ) {
   const constraints: QueryConstraint[] = [where("createdAt", ">=", Timestamp.fromDate(from))];
   if (to) constraints.push(where("createdAt", "<", Timestamp.fromDate(to)));
   return subscribe(
     "orders",
-    [...constraints, orderBy("createdAt", "desc"), limit(500)],
+    [...constraints, orderBy("createdAt", "desc"), limit(max)],
     toOrder,
     onData,
     onError,

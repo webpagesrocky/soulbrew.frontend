@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { startOfDay, subscribeOrdersBetween } from "../../api/collections";
+import { ORDERS_PAGE_SIZE, startOfDay, subscribeOrdersBetween } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
 import { deleteOrder } from "../../api/transactions";
 import type { Order, User } from "../../types";
@@ -8,8 +8,15 @@ const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN
 
 const statusLabel = { PENDING: "Pendiente", PAID: "Pagada", CANCELLED: "Cancelada" } as const;
 
-/** Días hacia atrás que se cargan de golpe. */
-const WINDOW_DAYS = 60;
+/**
+ * Días que se cargan de una vez, y cuántos añade cada "ver más".
+ *
+ * Antes se pedían 60 días de golpe contra un tope de 500 pedidos. Con 20 o 30
+ * ventas diarias eso son unos 20 días: los más viejos se quedaban fuera sin
+ * que nada lo dijera, y el encabezado seguía prometiendo 60. En tramos de dos
+ * semanas cabe todo con margen, y quien necesite ir más atrás lo pide.
+ */
+const PAGE_DAYS = 14;
 
 /**
  * Recibos y pedidos día por día, hoy incluido.
@@ -24,8 +31,8 @@ export function HistoryPanel({ user }: { user: User }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [openReceipt, setOpenReceipt] = useState<Order | null>(null);
-  // Cada día arranca cerrado: con 60 días cargados, abrirlos todos de golpe
-  // deja una lista en la que no se encuentra nada. El encabezado ya dice
+  // Cada día arranca cerrado: con dos semanas de pedidos abiertos de golpe se
+  // vuelve una lista en la que no se encuentra nada. El encabezado ya dice
   // cuántas ventas y cuánto se hizo, que es lo que se viene a ver.
   const [openDays, setOpenDays] = useState<string[]>([]);
 
@@ -35,28 +42,34 @@ export function HistoryPanel({ user }: { user: User }) {
     );
   }
 
+  const [days, setDays] = useState(PAGE_DAYS);
+
   // Hoy también entra: al cerrar la caja se viene aquí a revisar el día que
   // acaba de pasar, y tener que acordarse de que hoy "todavía no es historial"
   // sólo confunde. Sale arriba, como un día más.
-  const range = useMemo(() => {
-    const from = startOfDay();
-    from.setDate(from.getDate() - WINDOW_DAYS);
-    return { from, to: null };
-  }, []);
+  const from = useMemo(() => {
+    const start = startOfDay();
+    start.setDate(start.getDate() - days + 1);
+    return start;
+  }, [days]);
 
   useEffect(
     () =>
       subscribeOrdersBetween(
-        range.from,
-        range.to,
+        from,
+        null,
         (rows) => {
           setOrders(rows);
           setError("");
         },
         (reason) => setError(errorMessage(reason, "No se pudo cargar el historial")),
       ),
-    [range],
+    [from],
   );
+
+  // Si llegaron justo los del tope, la consulta cortó por el extremo viejo y
+  // hay días incompletos abajo. Mejor decirlo que enseñar cifras a medias.
+  const truncated = orders.length >= ORDERS_PAGE_SIZE;
 
   // Los tickets se leen por día, que es como se revisa un historial de caja.
   const byDay = useMemo(() => {
@@ -91,9 +104,15 @@ export function HistoryPanel({ user }: { user: User }) {
     <section className="reference-panel">
       <div className="reference-heading">
         <h1>Historial</h1>
-        <p>Recibos y pedidos de los últimos {WINDOW_DAYS} días. Toca un día para abrirlo.</p>
+        <p>Recibos y pedidos de los últimos {days} días. Toca un día para abrirlo.</p>
       </div>
       {error && <div className="notice error">{error}</div>}
+      {truncated && (
+        <div className="notice">
+          Son demasiados pedidos para enseñarlos juntos: los días más viejos de este tramo pueden
+          salir incompletos.
+        </div>
+      )}
 
       {byDay.map(([day, dayOrders]) => {
         const paid = dayOrders.filter((order) => order.status === "PAID");
@@ -143,7 +162,17 @@ export function HistoryPanel({ user }: { user: User }) {
       })}
 
       {!byDay.length && !error && (
-        <div className="empty-state">Todavía no hay pedidos de días anteriores.</div>
+        <div className="empty-state">No hay pedidos en los últimos {days} días.</div>
+      )}
+
+      {/* Sin tope de días: el botón sigue estirando el rango hacia atrás, y si
+          algún tramo se pasa del tope de pedidos, el aviso de arriba lo dice. */}
+      {!!byDay.length && (
+        <div className="history-more">
+          <button type="button" onClick={() => setDays((current) => current + PAGE_DAYS)}>
+            Ver {PAGE_DAYS} días más
+          </button>
+        </div>
       )}
 
       {openReceipt && (
