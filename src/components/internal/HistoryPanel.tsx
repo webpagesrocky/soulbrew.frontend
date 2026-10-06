@@ -12,24 +12,36 @@ const statusLabel = { PENDING: "Pendiente", PAID: "Pagada", CANCELLED: "Cancelad
 const WINDOW_DAYS = 60;
 
 /**
- * Recibos y pedidos de días anteriores.
+ * Recibos y pedidos día por día, hoy incluido.
  *
  * No hay un proceso que "mueva" los pedidos viejos a otro lado —eso exigiría
- * tareas programadas, que necesitan plan Blaze—: simplemente el panel de
- * Pedidos muestra sólo hoy y este muestra lo anterior. El resultado para quien
- * lo usa es el mismo y no hay un trabajo nocturno que se pueda quedar colgado.
+ * tareas programadas, que necesitan plan Blaze—: el panel de Pedidos es la
+ * barra trabajando sobre lo de hoy y este es el archivo, que los lee todos.
+ * Que el día en curso salga en los dos no estorba: son dos cosas distintas.
  */
 export function HistoryPanel({ user }: { user: User }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [openReceipt, setOpenReceipt] = useState<Order | null>(null);
+  // Cada día arranca cerrado: con 60 días cargados, abrirlos todos de golpe
+  // deja una lista en la que no se encuentra nada. El encabezado ya dice
+  // cuántas ventas y cuánto se hizo, que es lo que se viene a ver.
+  const [openDays, setOpenDays] = useState<string[]>([]);
 
+  function toggleDay(day: string) {
+    setOpenDays((current) =>
+      current.includes(day) ? current.filter((item) => item !== day) : [...current, day],
+    );
+  }
+
+  // Hoy también entra: al cerrar la caja se viene aquí a revisar el día que
+  // acaba de pasar, y tener que acordarse de que hoy "todavía no es historial"
+  // sólo confunde. Sale arriba, como un día más.
   const range = useMemo(() => {
-    const today = startOfDay();
-    const from = new Date(today);
+    const from = startOfDay();
     from.setDate(from.getDate() - WINDOW_DAYS);
-    return { from, to: today };
+    return { from, to: null };
   }, []);
 
   useEffect(
@@ -79,22 +91,31 @@ export function HistoryPanel({ user }: { user: User }) {
     <section className="reference-panel">
       <div className="reference-heading">
         <h1>Historial</h1>
-        <p>Recibos y pedidos de días anteriores (últimos {WINDOW_DAYS} días).</p>
+        <p>Recibos y pedidos de los últimos {WINDOW_DAYS} días. Toca un día para abrirlo.</p>
       </div>
       {error && <div className="notice error">{error}</div>}
 
       {byDay.map(([day, dayOrders]) => {
         const paid = dayOrders.filter((order) => order.status === "PAID");
         const dayTotal = paid.reduce((sum, order) => sum + order.total, 0);
+        const open = openDays.includes(day);
         return (
           <article className="reference-card history-day" key={day}>
-            <div className="card-heading">
+            <button
+              type="button"
+              className="card-heading day-toggle"
+              onClick={() => toggleDay(day)}
+              aria-expanded={open}
+            >
               <h2>{day}</h2>
               <span>
                 {paid.length} {paid.length === 1 ? "venta" : "ventas"} · {money.format(dayTotal)}
+                <b className={`history-chevron ${open ? "open" : ""}`} aria-hidden="true">
+                  ▾
+                </b>
               </span>
-            </div>
-            <div className="history-orders">
+            </button>
+            <div className="history-orders" hidden={!open}>
               {dayOrders.map((order) => (
                 <div className="history-order" key={order.id}>
                   <div>
