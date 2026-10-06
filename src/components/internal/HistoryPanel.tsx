@@ -7,6 +7,8 @@ import type { Order, User } from "../../types";
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
 const statusLabel = { PENDING: "Pendiente", PAID: "Pagada", CANCELLED: "Cancelada" } as const;
+/** En el recibo no va "CASH": eso es el nombre interno del método. */
+const methodLabel = { CASH: "Efectivo", CARD: "Tarjeta", TRANSFER: "Transferencia" } as const;
 
 /**
  * Días que se cargan de una vez, y cuántos añade cada "ver más".
@@ -190,10 +192,24 @@ export function HistoryPanel({ user }: { user: User }) {
             </div>
 
             <p className="cash-report-section">Productos</p>
-            {openReceipt.items.map((item) => (
-              <div className="cash-report-row" key={item.productId}>
+            {/* La llave va por posición y no por producto: el mismo producto
+                puede venir dos veces con personalizaciones distintas (un matcha
+                con lotus y otro con mazapán son dos renglones), y repetir
+                llave hace que React mezcle los renglones. */}
+            {openReceipt.items.map((item, index) => (
+              <div className="cash-report-row receipt-line" key={index}>
                 <span>
                   {item.quantity} × {item.productName}
+                  {/* Lo elegido se desglosa con su recargo: si no, el renglón
+                      cobra $120 por algo que en el menú dice $90 y el recibo no
+                      explica de dónde salió la diferencia. */}
+                  {item.options.map((option) => (
+                    <small key={`${option.groupId}-${option.optionId}`}>
+                      + {option.optionName}
+                      {option.priceDelta > 0 && ` (${money.format(option.priceDelta)})`}
+                    </small>
+                  ))}
+                  {item.quantity > 1 && <small>{money.format(item.unitPrice)} c/u</small>}
                 </span>
                 <span>{money.format(item.subtotal)}</span>
               </div>
@@ -207,7 +223,9 @@ export function HistoryPanel({ user }: { user: User }) {
             <p className="cash-report-section">Estado</p>
             <div className="cash-report-row">
               <span>{statusLabel[openReceipt.status]}</span>
-              <span>{openReceipt.paymentMethod ?? "—"}</span>
+              <span>
+                {openReceipt.paymentMethod ? methodLabel[openReceipt.paymentMethod] : "—"}
+              </span>
             </div>
             {openReceipt.cancellationReason && (
               <div className="cash-report-row">

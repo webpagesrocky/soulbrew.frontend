@@ -187,7 +187,7 @@ export function ReportsPanel({ user }: { user: User }) {
   ];
 
   return (
-    <section className="reference-panel">
+    <section className="reference-panel print-area">
       <div className="panel-heading reference-heading-row">
         <div className="reference-heading">
           <h1>{view === "sales" ? "Reporte semanal" : "Inventario"}</h1>

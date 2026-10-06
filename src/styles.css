@@ -333,11 +333,36 @@ small { color: #6d746e; }
 .cash-report-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-top: 1.75rem; }
 .cash-report-actions button:last-child { border: 1px solid var(--line); background: transparent; border-radius: 6px; font-weight: 700; }
 
+/* Impresión de recibos, cortes y reportes.
+   Lo que se imprime lleva `.print-area` (los recibos ya lo son por su fondo).
+   Se oculta con `visibility` y no con `display: none` sobre los hijos de body:
+   todo cuelga de #root, así que la regla de antes se llevaba por delante
+   también lo que se quería imprimir y salía una hoja en blanco. `visibility`
+   se hereda, pero se puede volver a encender por hondo que esté el elemento. */
 @media print {
-  body > *:not(.cash-report-backdrop) { display: none; }
-  .cash-report-backdrop { position: static; background: none; padding: 0; }
-  .cash-report { box-shadow: none; max-height: none; }
-  .cash-report-actions { display: none; }
+  html, body { height: auto; overflow: visible; background: white; }
+  body * { visibility: hidden; }
+  .print-area, .print-area *,
+  .cash-report-backdrop, .cash-report-backdrop * { visibility: visible; }
+  .print-area,
+  .cash-report-backdrop {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: none;
+    display: block;
+  }
+  .cash-report { box-shadow: none; max-height: none; max-width: none; border-radius: 0; }
+  /* Botones, pestañas y zona de peligro: en papel no se tocan y sólo estorban. */
+  .no-print,
+  .cash-report-actions,
+  .editor-danger,
+  .report-print,
+  .week-nav,
+  .segmented,
+  .inventory-tabs { display: none !important; }
 }
 .table-card { padding: 0; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: .82rem; }
@@ -772,6 +797,10 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .day-toggle > span { display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; color: #a17b61; font-size: 12px; font-weight: 650; }
 .day-toggle .history-chevron { font-size: 15px; font-weight: 400; }
 .history-orders { margin-top: 14px; }
+/* Renglón de recibo con su desglose de personalizaciones debajo. */
+.receipt-line { align-items: start; }
+.receipt-line > span:first-child { display: flex; flex-direction: column; gap: 2px; }
+.receipt-line small { color: #8a7a6d; font-size: 11.5px; }
 .history-more { display: flex; justify-content: center; padding: 4px 0 24px; }
 .history-more button { border: 1px solid var(--line); border-radius: 9px; background: white; padding: 9px 18px; color: #6b4226; font-size: 12.5px; font-weight: 700; }
 .history-more button:hover { border-color: var(--forest); color: var(--forest); }
