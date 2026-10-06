@@ -356,9 +356,12 @@ export async function cancelOrder(orderId: string, reason: string, actor: Actor)
 }
 
 /**
- * Si el pedido nunca se canceló primero (se borra directo, pendiente o
- * pagado), el punto de la tarjeta de puntos que había sumado se le resta al
- * cliente aquí; si ya se había cancelado, el punto ya se devolvió entonces.
+ * Borra un pedido para siempre.
+ *
+ * Deshace lo que el pedido había provocado, igual que cancelar: el punto de la
+ * tarjeta de puntos (si no se había devuelto ya al cancelarlo antes) y los
+ * insumos, si llegó a cobrarse. Sin esto, cada venta borrada se quedaba con su
+ * leche y sus vasos descontados y el inventario se iba desviando solo.
  */
 export async function deleteOrder(orderId: string) {
   const orderRef = doc(db, "orders", orderId);
@@ -366,10 +369,43 @@ export async function deleteOrder(orderId: string) {
   return runTransaction(db, async (tx) => {
     const orderSnap = await tx.get(orderRef);
     if (!orderSnap.exists()) throw new OrderError("Orden no encontrada");
-    const order = orderSnap.data() as { customerPhone?: string; loyaltyReverted?: boolean };
+    const order = orderSnap.data() as {
+      status: string;
+      items: OrderItem[];
+      cashSessionId: string | null;
+      customerPhone?: string;
+      loyaltyReverted?: boolean;
+    };
+    if (order.items.length > MAX_ITEMS) throw new OrderError("Orden con demasiados productos para procesar");
 
+    // Un corte cerrado guardó sus totales y ya no se recalculan: si se borra
+    // una venta suya, el corte sigue diciendo lo de antes y deja de cuadrar
+    // con el historial para siempre. Cancelar ya estaba prohibido por esto
+    // mismo; borrar se saltaba la protección.
+    if (order.cashSessionId) {
+      const sessionSnap = await tx.get(doc(db, "cashSessions", order.cashSessionId));
+      if (sessionSnap.exists() && sessionSnap.data()?.status === "CLOSED") {
+        throw new OrderError(
+          "Esta venta ya quedó dentro de un corte cerrado y no se puede borrar: el corte dejaría de cuadrar.",
+        );
+      }
+    }
+
+    // Los insumos sólo se consumieron si la orden llegó a cobrarse. Si ya
+    // estaba cancelada, cancelarla fue lo que los devolvió y no hay nada más.
+    const wasPaid = order.status === "PAID";
+    const productSnaps = wasPaid
+      ? await Promise.all(order.items.map((item) => tx.get(productRef(item.productId))))
+      : [];
+    const supplyUsage = wasPaid ? await readSupplyUsage(tx, order.items, productSnaps) : [];
+
+    // Todas las lecturas ya ocurrieron arriba (incluida la de reverseLoyalty):
+    // de aquí en adelante sólo se escribe.
     if (!order.loyaltyReverted) {
       await reverseLoyalty(tx, order.customerPhone ?? "");
+    }
+    for (const row of supplyUsage) {
+      tx.update(row.ref, { stock: round2(row.stock + row.quantity) });
     }
     tx.delete(orderRef);
   });

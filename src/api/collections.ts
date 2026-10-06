@@ -438,7 +438,6 @@ export async function deleteSupply(id: string) {
   return removed;
 }
 
-/** Borra un pedido. Sale del historial y del reporte; no descuadra cortes ya cerrados. */
 /**
  * Borra un renglón de la bitácora de insumos.
  *
