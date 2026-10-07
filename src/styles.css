@@ -79,6 +79,8 @@ small { color: #6d746e; }
 .sb-btn-outline { background: transparent; border: 1px solid rgba(255,255,255,.5); color: #fff; }
 
 .sb-notice { max-width: 640px; margin: 1.25rem auto; margin-left: 1.1rem; margin-right: 1.1rem; }
+/* Mismo aviso, pero dentro del cajón del carrito, que tapa la página. */
+.sb-drawer-error { margin: 0 0 .85rem; font-size: 13.5px; }
 
 .sb-menu { padding: 3rem 1.1rem 1rem; text-align: center; }
 .sb-menu .sb-eyebrow { color: var(--sb-tan); }
@@ -1089,3 +1091,15 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
   .reference-heading-row { align-items: stretch; }
   .reference-heading-row .segmented { width: 100%; }
 }
+
+/* Consulta de la tarjeta de puntos desde la página pública. */
+.sb-card-lookup { max-width: 640px; margin: 0 auto; padding: 2.5rem 1.1rem; text-align: center; }
+.sb-card-lookup h2 { margin: .35rem 0 .5rem; font-size: 1.6rem; }
+.sb-card-lookup > p:last-of-type { margin: 0 0 1.1rem; color: #6b6158; }
+.sb-card-lookup form { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center; }
+.sb-card-lookup input { flex: 1 1 220px; max-width: 320px; }
+.sb-card-lookup button:disabled { opacity: .45; }
+/* Guardar la tarjeta en el celular. */
+.loyalty-save { margin: 1.4rem auto 0; max-width: 360px; text-align: center; }
+.loyalty-save small { display: block; margin-top: .75rem; color: #6b6158; font-size: 12.5px; line-height: 1.5; }
+.loyalty-saved { margin: .6rem 0 0; color: #2f6b45; font-size: 13px; font-weight: 650; }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   subscribeCategories,
   subscribeOptionGroups,
@@ -8,7 +8,7 @@ import {
 } from "../api/collections";
 import { errorMessage } from "../api/errors";
 import { resolveOptionGroups } from "../api/options";
-import { createPublicOrder, type LoyaltyResult } from "../api/transactions";
+import { createPublicOrder, MAX_ITEMS, type LoyaltyResult } from "../api/transactions";
 import { Icon } from "../components/Icon";
 import { LoyaltyCard } from "../components/LoyaltyCard";
 import { ProductCustomizer } from "../components/ProductCustomizer";
@@ -58,6 +58,8 @@ export function PublicView() {
   const [cartOpen, setCartOpen] = useState(false);
   const [logoBroken, setLogoBroken] = useState(false);
   const [loyalty, setLoyalty] = useState<{ name: string; phone: string; result: LoyaltyResult } | null>(null);
+  const [lookupPhone, setLookupPhone] = useState("");
+  const navigate = useNavigate();
 
   // El menú se mantiene en vivo: si en el panel interno agotan o desactivan un
   // producto, desaparece de la carta sin que nadie recargue la página.
@@ -146,6 +148,15 @@ export function PublicView() {
             : line,
         );
       }
+      // El tope se avisa aquí y no al enviar: antes la orden se armaba entera
+      // y reventaba hasta el final, cuando ya habían escrito su nombre.
+      if (current.length >= MAX_ITEMS) {
+        setError(
+          `Una orden admite hasta ${MAX_ITEMS} bebidas distintas. Envía ésta y haz otra para el resto.`,
+        );
+        return current;
+      }
+      setError("");
       return [...current, { id: `${key}-${Date.now()}`, productId, options, quantity }];
     });
   }
@@ -175,6 +186,9 @@ export function PublicView() {
     }
     setSending(true);
     setError("");
+    // El "¡Orden recibida!" de la vez pasada se queda colgado si no se limpia,
+    // y un intento fallido parecía exitoso.
+    setMessage("");
     try {
       const order = await createPublicOrder({
         customerName,
@@ -304,6 +318,32 @@ export function PublicView() {
         )}
       </section>
 
+      {/* Hasta ahora la tarjeta sólo aparecía al terminar un pedido y se
+          perdía al cerrarla: no había forma de volver a verla sin ordenar otra
+          vez. Con el teléfono se abre cuando quieran. */}
+      <section className="sb-card-lookup" id="tarjeta">
+        <p className="sb-eyebrow">Tarjeta de puntos</p>
+        <h2>Consulta tu tarjeta</h2>
+        <p>Cada 10 compras, una bebida va por nuestra cuenta. Escribe tu celular y mírala.</p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (/^\d{10}$/.test(lookupPhone)) navigate(`/tarjeta/${lookupPhone}`);
+          }}
+        >
+          <input
+            value={lookupPhone}
+            onChange={(event) => setLookupPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
+            inputMode="numeric"
+            placeholder="Tu celular, 10 dígitos"
+            aria-label="Tu número de celular"
+          />
+          <button className="primary-button" disabled={lookupPhone.length !== 10}>
+            Ver mi tarjeta
+          </button>
+        </form>
+      </section>
+
       <section className="sb-follow" id="follow">
         <p className="sb-eyebrow">Síguenos</p>
         <a className="sb-social" href="https://www.instagram.com/soulbrewmxl/?hl=es" target="_blank" rel="noreferrer" aria-label="Instagram de Soul Brew">
@@ -406,6 +446,11 @@ export function PublicView() {
               {!cart.length && <p className="muted">Aún no eliges nada.</p>}
             </div>
             <div className="sb-drawer-total"><span>Total</span><strong>{money.format(total)}</strong></div>
+            {/* El aviso va DENTRO del cajón. Estaba sólo en el cuerpo de la
+                página, detrás de esta ventana: si la orden fallaba, el botón
+                volvía de "Enviando…" a "Enviar orden" y el cliente no veía
+                absolutamente nada que le dijera qué pasó. */}
+            {error && <div className="notice error sb-drawer-error">{error}</div>}
             <form onSubmit={placeOrder}>
               <label>Tu nombre</label>
               <input

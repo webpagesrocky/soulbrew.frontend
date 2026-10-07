@@ -13,6 +13,27 @@ export function CustomerCardView() {
   const { phone = "" } = useParams();
   const [customer, setCustomer] = useState<Customer | null | undefined>(undefined);
   const [error, setError] = useState("");
+  const [saved, setSaved] = useState("");
+
+  /**
+   * En celular abre el menú de compartir del sistema, que es por donde la
+   * gente guarda cosas (WhatsApp a uno mismo, notas, marcadores). En
+   * escritorio, donde ese menú no existe, copia el enlace.
+   */
+  async function saveCard() {
+    const url = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Mi tarjeta de Soul Brew", url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setSaved("Enlace copiado. Guárdalo donde lo vuelvas a encontrar.");
+    } catch {
+      // Si la persona cierra el menú de compartir no es un error: se calla.
+      setSaved("");
+    }
+  }
 
   useEffect(
     () =>
@@ -38,7 +59,21 @@ export function CustomerCardView() {
           </p>
         )}
         {customer && (
-          <LoyaltyCard name={customer.name} visits={customer.visits} rewardEligible={false} />
+          <>
+            <LoyaltyCard name={customer.name} visits={customer.visits} rewardEligible={false} />
+            {/* Guardar la tarjeta es guardar ESTA dirección: la página lee las
+                visitas en vivo, así que el enlace nunca se queda viejo. */}
+            <div className="loyalty-save">
+              <button type="button" className="primary-button" onClick={() => void saveCard()}>
+                Guardar mi tarjeta
+              </button>
+              {saved && <p className="loyalty-saved">{saved}</p>}
+              <small>
+                También puedes añadir esta página a la pantalla de inicio de tu celular desde el
+                menú de tu navegador: queda como una app y abre tu tarjeta de un toque.
+              </small>
+            </div>
+          </>
         )}
         <Link to="/" className="sb-btn sb-btn-outline loyalty-page-back">
           Ver el menú
