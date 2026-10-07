@@ -30,7 +30,14 @@ import type { ChosenOption, OrderItem, PaymentMethod, RecipeItem } from "../type
  * una relación matemática exacta entre lo leído y lo escrito) las acepten.
  */
 
-const MAX_ITEMS = 8;
+/**
+ * Renglones distintos por orden. Tiene que ser el mismo número que el de las
+ * reglas: validar cada renglón consume presupuesto de evaluación y, al
+ * pasarse, Firestore rechaza la orden completa con un "permission denied" que
+ * no explica nada. Cinco es lo que entra con margen, medido contra el proyecto
+ * real. Para más bebidas, otra orden.
+ */
+export const MAX_ITEMS = 5;
 
 /** Tope de personalizaciones por renglón, también impuesto por las reglas. */
 const MAX_OPTIONS = 8;
