@@ -1103,3 +1103,8 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .loyalty-save { margin: 1.4rem auto 0; max-width: 360px; text-align: center; }
 .loyalty-save small { display: block; margin-top: .75rem; color: #6b6158; font-size: 12.5px; line-height: 1.5; }
 .loyalty-saved { margin: .6rem 0 0; color: #2f6b45; font-size: 13px; font-weight: 650; }
+/* Dentro de la ventana que sale al ordenar el fondo es oscuro, así que el
+   mismo texto de ayuda que se lee bien en la página de la tarjeta aquí se
+   perdía contra el fondo. */
+.loyalty-modal .loyalty-save small { color: #d7ccc0; }
+.loyalty-modal .loyalty-saved { color: #a8dcbd; }

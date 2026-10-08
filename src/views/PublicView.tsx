@@ -11,6 +11,7 @@ import { resolveOptionGroups } from "../api/options";
 import { createPublicOrder, MAX_ITEMS, type LoyaltyResult } from "../api/transactions";
 import { Icon } from "../components/Icon";
 import { LoyaltyCard } from "../components/LoyaltyCard";
+import { SaveCardButton } from "../components/SaveCardButton";
 import { ProductCustomizer } from "../components/ProductCustomizer";
 import type { ChosenOption, Category, OptionGroup, OptionImage, Product, ProductCategory } from "../types";
 
@@ -506,6 +507,10 @@ export function PublicView() {
               visits={loyalty.result.visits}
               rewardEligible={loyalty.result.rewardEligible}
             />
+            {/* Aquí es donde de verdad conviene ofrecerlo: la tarjeta está
+                enfrente y el momento se pasa en cuanto cierran. Antes había
+                que buscarla con el teléfono para poder guardarla. */}
+            <SaveCardButton phone={loyalty.phone} />
             <button type="button" className="loyalty-modal-close" onClick={() => setLoyalty(null)}>
               Listo
             </button>
