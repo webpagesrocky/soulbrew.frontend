@@ -44,8 +44,12 @@ small { color: #6d746e; }
 .notice.success { background: #e1ebdc; color: #254731; border-left: 3px solid #4f755a; }
 .page-loader { min-height: 100vh; display: grid; place-items: center; background: var(--forest); color: white; }
 
-/* Vista pública — mobile-first, estilo Soul Brew */
-.sb-page {
+/* Los colores de la vista pública viven aquí y no dentro de `.sb-page`.
+   La ventana de personalización se usa también en barra, que está fuera de
+   esa página: ahí las variables no existían, así que el chip elegido se
+   quedaba con letra blanca sobre fondo transparente —invisible— y parecía que
+   al tocarlo se borraba en vez de marcarse. */
+:root {
   --sb-brown: #4a2c1a;
   --sb-brown-deep: #1d0f08;
   --sb-tan: #b18662;
@@ -53,6 +57,10 @@ small { color: #6d746e; }
   --sb-line: #ece4d8;
   --sb-muted: #8d7862;
   --sb-price: #6b4226;
+}
+
+/* Vista pública — mobile-first, estilo Soul Brew */
+.sb-page {
   min-height: 100vh;
   background: var(--sb-cream);
   color: #2c1c12;
