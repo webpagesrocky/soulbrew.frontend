@@ -1,17 +1,41 @@
 import { useEffect, useMemo, useState } from "react";
-import { subscribeCategories, subscribeProducts } from "../../api/collections";
+import {
+  subscribeCategories,
+  subscribeOptionGroups,
+  subscribeOptionImages,
+  subscribeProducts,
+} from "../../api/collections";
 import { errorMessage } from "../../api/errors";
-import { createPublicOrder, payOrder } from "../../api/transactions";
-import type { Category, PaymentMethod, Product, User } from "../../types";
+import { resolveOptionGroups } from "../../api/options";
+import { createPublicOrder, MAX_ITEMS, payOrder } from "../../api/transactions";
+import { ProductCustomizer } from "../ProductCustomizer";
+import type {
+  Category,
+  ChosenOption,
+  OptionGroup,
+  OptionImage,
+  PaymentMethod,
+  Product,
+  User,
+} from "../../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
 /**
- * Tope de renglones distintos por orden. Lo imponen las reglas de Firestore,
- * que validan precio por precio sin poder usar bucles, así que la interfaz
- * avisa antes en vez de dejar que el guardado falle.
+ * Un renglón del ticket. El mismo producto puede ir dos veces con
+ * personalizaciones distintas: un latte con cold foam de vainilla y otro sin
+ * nada son dos cosas que se cobran distinto.
  */
-const MAX_ITEMS = 8;
+interface Line {
+  id: string;
+  productId: string;
+  options: ChosenOption[];
+  quantity: number;
+}
+
+function lineKey(productId: string, options: ChosenOption[]) {
+  return `${productId}|${options.map((option) => option.optionId).sort().join(",")}`;
+}
 
 /**
  * Tope de unidades por producto en un pedido. El stock real ya no limita la
@@ -37,7 +61,14 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [category, setCategory] = useState<string | null>(null);
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<Line[]>([]);
+  const [groups, setGroups] = useState<OptionGroup[]>([]);
+  const [images, setImages] = useState<OptionImage[]>([]);
+  // Producto que se está personalizando. `line` viene lleno al editar un
+  // renglón que ya está en el ticket, para no volver a elegir todo.
+  const [customizing, setCustomizing] = useState<{ product: Product; line: Line | null } | null>(
+    null,
+  );
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [error, setError] = useState("");
@@ -61,6 +92,23 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
     [],
   );
 
+  useEffect(
+    () =>
+      subscribeOptionGroups(
+        (rows) => setGroups(rows.filter((group) => group.active)),
+        (reason) => setError(errorMessage(reason, "No se pudieron cargar las personalizaciones")),
+      ),
+    [],
+  );
+
+  useEffect(
+    () =>
+      subscribeOptionImages(setImages, (reason) =>
+        setError(errorMessage(reason, "No se pudieron cargar las fotos")),
+      ),
+    [],
+  );
+
   useEffect(() => {
     setCategory((current) => {
       if (current && categories.some((item) => item.id === current)) return current;
@@ -69,31 +117,65 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
   }, [categories]);
 
   const shown = products.filter((product) => product.category === category);
-  const selections = products.filter((product) => cart[product.id]);
+  const productOf = (id: string) => products.find((product) => product.id === id);
+
+  /** Precio de una unidad: el del producto más lo que cobre cada opción. */
+  function linePrice(line: Line) {
+    const base = productOf(line.productId)?.price ?? 0;
+    return line.options.reduce((sum, option) => sum + option.priceDelta, base);
+  }
+
   const total = useMemo(
-    () => selections.reduce((sum, product) => sum + product.price * (cart[product.id] ?? 0), 0),
-    [cart, selections],
+    () => cart.reduce((sum, line) => sum + linePrice(line) * line.quantity, 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cart, products],
   );
 
-  function change(product: Product, delta: number) {
+  /**
+   * Tocar un producto abre su ventana de personalización, igual que en el menú
+   * público. Antes el pedido de barra se armaba sólo con producto y cantidad:
+   * el cold foam no se elegía y, sobre todo, no se cobraba.
+   */
+  function pick(product: Product) {
     setError("");
+    if (!resolveOptionGroups(product, groups).length) return addLine(product.id, [], 1);
+    setCustomizing({ product, line: null });
+  }
+
+  function addLine(productId: string, options: ChosenOption[], quantity: number) {
+    const key = lineKey(productId, options);
     setCart((current) => {
-      const next = Math.max(0, Math.min(MAX_QTY, (current[product.id] ?? 0) + delta));
-      if (next === 0) {
-        const copy = { ...current };
-        delete copy[product.id];
-        return copy;
+      const existing = current.find((line) => lineKey(line.productId, line.options) === key);
+      if (existing) {
+        return current.map((line) =>
+          line === existing
+            ? { ...line, quantity: Math.min(MAX_QTY, line.quantity + quantity) }
+            : line,
+        );
       }
-      if (!current[product.id] && Object.keys(current).length >= MAX_ITEMS) {
-        setError(`Una orden admite hasta ${MAX_ITEMS} productos distintos.`);
+      if (current.length >= MAX_ITEMS) {
+        setError(`Una orden admite hasta ${MAX_ITEMS} renglones distintos.`);
         return current;
       }
-      return { ...current, [product.id]: next };
+      return [...current, { id: `${key}-${Date.now()}`, productId, options, quantity }];
     });
   }
 
+  function changeQuantity(lineId: string, delta: number) {
+    setError("");
+    setCart((current) =>
+      current
+        .map((line) =>
+          line.id === lineId
+            ? { ...line, quantity: Math.max(0, Math.min(MAX_QTY, line.quantity + delta)) }
+            : line,
+        )
+        .filter((line) => line.quantity > 0),
+    );
+  }
+
   async function submit(charge: PaymentMethod | null) {
-    if (!selections.length) return setError("Agrega al menos un producto.");
+    if (!cart.length) return setError("Agrega al menos un producto.");
     if (customerName.trim().length < 2) return setError("Escribe el nombre del cliente.");
     if (customerPhone && !/^\d{10}$/.test(customerPhone)) {
       return setError("El número de celular debe tener 10 dígitos.");
@@ -105,9 +187,10 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
       const order = await createPublicOrder({
         customerName,
         customerPhone,
-        items: selections.map((product) => ({
-          productId: product.id,
-          quantity: cart[product.id]!,
+        items: cart.map((line) => ({
+          productId: line.productId,
+          quantity: line.quantity,
+          options: line.options,
         })),
       });
 
@@ -166,14 +249,16 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
 
             <div className="manual-products">
               {shown.map((product) => {
-                const quantity = cart[product.id] ?? 0;
+                const quantity = cart
+                  .filter((line) => line.productId === product.id)
+                  .reduce((sum, line) => sum + line.quantity, 0);
                 const soldOut = product.soldOut;
                 return (
                   <button
                     key={product.id}
                     className={`manual-product ${quantity ? "picked" : ""} ${soldOut ? "sold-out" : ""}`}
                     disabled={soldOut}
-                    onClick={() => change(product, 1)}
+                    onClick={() => pick(product)}
                   >
                     <span className="manual-product-name">{product.name}</span>
                     <span className="manual-product-price">{money.format(product.price)}</span>
@@ -191,26 +276,51 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
           <div className="manual-order-ticket">
             <h3>Ticket</h3>
             <div className="manual-lines">
-              {selections.map((product) => (
-                <div className="manual-line" key={product.id}>
-                  <div>
-                    <strong>{product.name}</strong>
-                    <small>{money.format(product.price)} c/u</small>
+              {cart.map((line) => {
+                const product = productOf(line.productId);
+                if (!product) return null;
+                return (
+                  <div className="manual-line" key={line.id}>
+                    <div>
+                      <strong>{product.name}</strong>
+                      <small>{money.format(linePrice(line))} c/u</small>
+                      {/* Lo elegido se ve en el ticket: es lo que la barra
+                          tiene que preparar y lo que explica el precio. */}
+                      {line.options.length > 0 && (
+                        <ul className="manual-line-options">
+                          {line.options.map((option) => (
+                            <li key={option.optionId}>
+                              {option.optionName}
+                              {option.priceDelta > 0 && ` (+${money.format(option.priceDelta)})`}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {resolveOptionGroups(product, groups).length > 0 && (
+                        <button
+                          type="button"
+                          className="manual-line-edit"
+                          onClick={() => setCustomizing({ product, line })}
+                        >
+                          Editar
+                        </button>
+                      )}
+                    </div>
+                    <div className="sb-qty manual-qty">
+                      <button onClick={() => changeQuantity(line.id, -1)}>−</button>
+                      <span>{line.quantity}</span>
+                      <button
+                        onClick={() => changeQuantity(line.id, 1)}
+                        disabled={line.quantity >= MAX_QTY}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <strong>{money.format(linePrice(line) * line.quantity)}</strong>
                   </div>
-                  <div className="sb-qty manual-qty">
-                    <button onClick={() => change(product, -1)}>−</button>
-                    <span>{cart[product.id]}</span>
-                    <button
-                      onClick={() => change(product, 1)}
-                      disabled={(cart[product.id] ?? 0) >= MAX_QTY}
-                    >
-                      +
-                    </button>
-                  </div>
-                  <strong>{money.format(product.price * cart[product.id]!)}</strong>
-                </div>
-              ))}
-              {!selections.length && <p className="reference-empty">Toca un producto para agregarlo.</p>}
+                );
+              })}
+              {!cart.length && <p className="reference-empty">Toca un producto para agregarlo.</p>}
             </div>
 
             <div className="manual-total">
@@ -251,6 +361,26 @@ export function ManualOrder({ user, onClose, onDone }: Props) {
           </div>
         </div>
       </div>
+
+      {customizing && (
+        <ProductCustomizer
+          product={customizing.product}
+          groups={groups}
+          images={images}
+          initial={customizing.line?.options ?? []}
+          initialQuantity={customizing.line?.quantity ?? 1}
+          onClose={() => setCustomizing(null)}
+          onConfirm={(options, quantity) => {
+            // Al editar se quita el renglón viejo y se vuelve a agregar: si la
+            // nueva combinación ya existe en el ticket, se juntan solas.
+            if (customizing.line) {
+              setCart((current) => current.filter((line) => line.id !== customizing.line!.id));
+            }
+            addLine(customizing.product.id, options, quantity);
+            setCustomizing(null);
+          }}
+        />
+      )}
     </div>
   );
 }

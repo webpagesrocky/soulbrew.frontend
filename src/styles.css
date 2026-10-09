@@ -1108,3 +1108,7 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
    perdía contra el fondo. */
 .loyalty-modal .loyalty-save small { color: #d7ccc0; }
 .loyalty-modal .loyalty-saved { color: #a8dcbd; }
+
+/* Personalizaciones en el ticket de barra. */
+.manual-line-options { margin: 4px 0 0; padding-left: 14px; color: #8a7a6d; font-size: 11.5px; line-height: 1.5; }
+.manual-line-edit { margin-top: 5px; border: 0; background: none; padding: 0; color: #6b4226; font-size: 11.5px; font-weight: 700; text-decoration: underline; }

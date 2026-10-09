@@ -40,7 +40,7 @@ import type { ChosenOption, OrderItem, PaymentMethod, RecipeItem } from "../type
 export const MAX_ITEMS = 5;
 
 /** Tope de personalizaciones por renglón, también impuesto por las reglas. */
-const MAX_OPTIONS = 8;
+const MAX_OPTIONS = 6;
 
 export class OrderError extends Error {}
 
