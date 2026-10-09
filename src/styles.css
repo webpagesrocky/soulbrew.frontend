@@ -406,7 +406,12 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
   .internal-content { padding: 1.25rem; }
   .order-grid { grid-template-columns: 1fr; }
   .panel-heading { align-items: start; flex-direction: column; }
+  /* En columna, el `flex: 1 1 16rem` de arriba deja de medir ancho y pasa a
+     medir ALTO: el título se estiraba a 256px teniendo 50px de contenido, y
+     dejaba un hueco en blanco de dos dedos encima de todo. */
+  .panel-heading > .reference-heading { flex: 0 0 auto; width: 100%; }
   .segmented { max-width: 100%; overflow-x: auto; }
+
 }
 
 @media (max-width: 520px) {
@@ -1120,3 +1125,31 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 /* Personalizaciones en el ticket de barra. */
 .manual-line-options { margin: 4px 0 0; padding-left: 14px; color: #8a7a6d; font-size: 11.5px; line-height: 1.5; }
 .manual-line-edit { margin-top: 5px; border: 0; background: none; padding: 0; color: #6b4226; font-size: 11.5px; font-weight: 700; text-decoration: underline; }
+
+
+/* ---- Panel interno en teléfono ----
+   Va al FINAL a propósito. Estas reglas pelean con otras de la misma fuerza
+   (una clase y un elemento), y entre iguales gana la última del archivo: desde
+   la mitad del archivo no se aplicaban. */
+@media (max-width: 900px) {
+  /* Safari de iPhone hace zoom solo al tocar un campo con letra de menos de
+     16px y deja la pantalla corrida de lado. Los formularios del panel iban a
+     12px, así que dar de alta un producto desde el teléfono era pelearse con
+     el zoom en cada campo. En computadora se quedan como estaban. */
+  .internal-shell input,
+  .internal-shell select,
+  .internal-shell textarea { font-size: 16px; }
+
+  /* Botones de 23px de alto: con el dedo se falla más de lo que se atina. */
+  .internal-shell .avail-toggle,
+  .internal-shell .pill-on,
+  .internal-shell .pill-off,
+  .internal-shell .filter-pills button,
+  .internal-shell .product-edit,
+  .internal-shell .category-delete,
+  .internal-shell .session-receipt,
+  .internal-shell .session-delete,
+  .internal-shell .card-heading button,
+  .mobile-header button { min-height: 36px; }
+  .internal-shell .row-delete { width: 32px; height: 32px; }
+}
