@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getAggregateFromServer,
   getDocs,
   limit,
   onSnapshot,
@@ -10,6 +11,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  sum,
   Timestamp,
   updateDoc,
   where,
@@ -211,6 +213,23 @@ export function startOfDay(date = new Date()): Date {
 
 /** Tope de pedidos por consulta, si quien llama no pide otro. */
 export const ORDERS_PAGE_SIZE = 500;
+
+/**
+ * Lo vendido desde el primer día, de verdad.
+ *
+ * La suma la hace el servidor: no se descargan los pedidos, así que no importa
+ * cuántos miles haya. Antes el tablero sumaba lo que tenía a la mano —los 200
+ * pedidos más recientes— y al pasar de esos 200 cada venta nueva empujaba una
+ * vieja fuera de la cuenta: el "total" se quedaba clavado en el mismo número
+ * aunque el negocio siguiera vendiendo.
+ */
+export async function fetchSalesTotal(): Promise<number> {
+  const snapshot = await getAggregateFromServer(
+    query(collection(db, "orders"), where("status", "==", "PAID")),
+    { total: sum("total") },
+  );
+  return snapshot.data().total ?? 0;
+}
 
 /**
  * Pedidos dentro de un rango. Lo usan tanto el panel del día como el historial

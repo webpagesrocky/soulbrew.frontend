@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { subscribeOrders } from "../../api/collections";
+import { fetchSalesTotal, subscribeOrders } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
 import type { Order } from "../../types";
 import { Icon } from "../Icon";
@@ -9,6 +9,10 @@ const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN
 export function DashboardPanel({ onViewOrders }: { onViewOrders: () => void }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState("");
+  // El total histórico no sale de `orders`: esa lista sólo trae los pedidos
+  // más recientes y sumarla daba un total que dejaba de crecer. Lo suma el
+  // servidor, y se vuelve a pedir cada vez que entra un pedido.
+  const [totalSales, setTotalSales] = useState<number | null>(null);
 
   useEffect(
     () =>
@@ -23,14 +27,30 @@ export function DashboardPanel({ onViewOrders }: { onViewOrders: () => void }) {
     [],
   );
 
+  // Se vuelve a pedir con cada cambio en los pedidos, para que suba en cuanto
+  // se cobra algo. Es una sola lectura: la cuenta la hace el servidor.
+  const paidCount = orders.filter((order) => order.status === "PAID").length;
+  useEffect(() => {
+    let vigente = true;
+    fetchSalesTotal()
+      .then((value) => {
+        if (vigente) setTotalSales(value);
+      })
+      .catch(() => {
+        // Si la suma falla, la tarjeta se queda en "—" en vez de inventar un
+        // número: más vale no decir nada que decir una cifra que no es.
+        if (vigente) setTotalSales(null);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [paidCount]);
+
   const data = useMemo(() => {
     const todayKey = new Date().toDateString();
     const today = orders.filter((order) => order.createdAt?.toDateString() === todayKey);
     const paidToday = today.filter((order) => order.status === "PAID");
     const salesToday = paidToday.reduce((sum, order) => sum + order.total, 0);
-    const totalSales = orders
-      .filter((order) => order.status === "PAID")
-      .reduce((sum, order) => sum + order.total, 0);
     const counts = new Map<string, number>();
     for (const order of paidToday) {
       for (const item of order.items) {
@@ -38,7 +58,7 @@ export function DashboardPanel({ onViewOrders }: { onViewOrders: () => void }) {
       }
     }
     const best = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-    return { today, paidToday, salesToday, totalSales, best };
+    return { today, paidToday, salesToday, best };
   }, [orders]);
 
   const cards = [
@@ -51,7 +71,12 @@ export function DashboardPanel({ onViewOrders }: { onViewOrders: () => void }) {
       tone: "amber",
     },
     { label: "Completados", value: String(data.paidToday.length), icon: "check" as const, tone: "brown" },
-    { label: "Total de ventas", value: money.format(data.totalSales), icon: "trend" as const, tone: "green" },
+    {
+      label: "Total de ventas",
+      value: totalSales === null ? "—" : money.format(totalSales),
+      icon: "trend" as const,
+      tone: "green",
+    },
   ];
 
   return (
