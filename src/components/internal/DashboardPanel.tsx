@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchSalesTotal, subscribeOrders } from "../../api/collections";
+import { addMonths, fetchSalesTotal, startOfMonth, subscribeOrders } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
 import type { Order } from "../../types";
 import { Icon } from "../Icon";
@@ -9,10 +9,10 @@ const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN
 export function DashboardPanel({ onViewOrders }: { onViewOrders: () => void }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState("");
-  // El total histórico no sale de `orders`: esa lista sólo trae los pedidos
-  // más recientes y sumarla daba un total que dejaba de crecer. Lo suma el
+  // La venta del mes no sale de `orders`: esa lista sólo trae los pedidos más
+  // recientes y sumarla daba un total que dejaba de crecer. La suma el
   // servidor, y se vuelve a pedir cada vez que entra un pedido.
-  const [totalSales, setTotalSales] = useState<number | null>(null);
+  const [monthSales, setMonthSales] = useState<number | null>(null);
 
   useEffect(
     () =>
@@ -32,19 +32,22 @@ export function DashboardPanel({ onViewOrders }: { onViewOrders: () => void }) {
   const paidCount = orders.filter((order) => order.status === "PAID").length;
   useEffect(() => {
     let vigente = true;
-    fetchSalesTotal()
-      .then((value) => {
-        if (vigente) setTotalSales(value);
+    const desde = startOfMonth();
+    fetchSalesTotal(desde, addMonths(desde, 1))
+      .then(({ total }) => {
+        if (vigente) setMonthSales(total);
       })
       .catch(() => {
         // Si la suma falla, la tarjeta se queda en "—" en vez de inventar un
         // número: más vale no decir nada que decir una cifra que no es.
-        if (vigente) setTotalSales(null);
+        if (vigente) setMonthSales(null);
       });
     return () => {
       vigente = false;
     };
   }, [paidCount]);
+
+  const mesActual = new Date().toLocaleDateString("es-MX", { month: "long" });
 
   const data = useMemo(() => {
     const todayKey = new Date().toDateString();
@@ -72,8 +75,10 @@ export function DashboardPanel({ onViewOrders }: { onViewOrders: () => void }) {
     },
     { label: "Completados", value: String(data.paidToday.length), icon: "check" as const, tone: "brown" },
     {
-      label: "Total de ventas",
-      value: totalSales === null ? "—" : money.format(totalSales),
+      // Mes corrido, no histórico: el acumulado de siempre se leía como "lo
+      // de este mes" y hacía parecer que el sistema sumaba de más.
+      label: `Ventas de ${mesActual}`,
+      value: monthSales === null ? "—" : money.format(monthSales),
       icon: "trend" as const,
       tone: "green",
     },

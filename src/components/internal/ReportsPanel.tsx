@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  addMonths,
+  fetchMonthlySales,
+  MONTH_PAGE_SIZE,
+  ORDERS_PAGE_SIZE,
   startOfDay,
+  startOfMonth,
   subscribeCategories,
   subscribeOrdersBetween,
   subscribeProducts,
   subscribeSupplies,
   subscribeSupplyMovements,
+  type MonthSales,
 } from "../../api/collections";
 import { costTable, unitCost } from "../../api/costing";
 import { errorMessage } from "../../api/errors";
@@ -24,6 +30,13 @@ function startOfWeek(date: Date): Date {
   return start;
 }
 
+/** "noviembre de 2026" -> "Noviembre de 2026". Sólo la primera letra: el CSS
+ *  `capitalize` toca cada palabra y deja "Noviembre De 2026". */
+function monthLabel(date: Date): string {
+  const text = date.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function addDays(date: Date, days: number): Date {
   const copy = new Date(date);
   copy.setDate(copy.getDate() + days);
@@ -40,7 +53,11 @@ function addDays(date: Date, days: number): Date {
 export function ReportsPanel({ user }: { user: User }) {
   const [view, setView] = useState<"sales" | "inventory">("inventory");
   const [inventoryTab, setInventoryTab] = useState<"forecast" | "supplies">("forecast");
-  const [weekOffset, setWeekOffset] = useState(0);
+  // El mes es lo que se compara contra el banco y contra lo que la dueña
+  // cuenta, así que es el periodo por defecto; la semana sigue disponible.
+  const [period, setPeriod] = useState<"week" | "month">("month");
+  const [offset, setOffset] = useState(0);
+  const [months, setMonths] = useState<MonthSales[] | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [movements, setMovements] = useState<SupplyMovement[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -50,9 +67,18 @@ export function ReportsPanel({ user }: { user: User }) {
   const [message, setMessage] = useState("");
 
   const range = useMemo(() => {
-    const from = addDays(startOfWeek(new Date()), weekOffset * 7);
+    if (period === "month") {
+      const from = addMonths(startOfMonth(new Date()), offset);
+      return { from, to: addMonths(from, 1) };
+    }
+    const from = addDays(startOfWeek(new Date()), offset * 7);
     return { from, to: addDays(from, 7) };
-  }, [weekOffset]);
+  }, [period, offset]);
+
+  // Un mes no cabe en el tope de la semana: octubre de 2026 fueron 600
+  // pedidos. Si aun así se llena, se avisa en vez de enseñar un mes a medias.
+  const maxOrders = period === "month" ? MONTH_PAGE_SIZE : ORDERS_PAGE_SIZE;
+  const truncated = orders.length >= maxOrders;
 
   useEffect(
     () =>
@@ -61,9 +87,27 @@ export function ReportsPanel({ user }: { user: User }) {
         range.to,
         setOrders,
         (reason) => setError(errorMessage(reason, "No se pudieron cargar las ventas")),
+        maxOrders,
       ),
-    [range],
+    [range, maxOrders],
   );
+
+  // El resumen de los últimos doce meses: una lectura por mes, y la cuenta la
+  // hace el servidor. Sólo se pide cuando se está viendo Ventas.
+  useEffect(() => {
+    if (view !== "sales") return;
+    let vigente = true;
+    fetchMonthlySales(12)
+      .then((rows) => {
+        if (vigente) setMonths(rows);
+      })
+      .catch(() => {
+        if (vigente) setMonths(null);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [view]);
 
   useEffect(
     () =>
@@ -171,12 +215,18 @@ export function ReportsPanel({ user }: { user: User }) {
     };
   }, [orders, movements, products, categories, supplies]);
 
+  const rangeText = `${range.from.toLocaleDateString("es-MX")} – ${addDays(range.to, -1).toLocaleDateString("es-MX")}`;
+  const monthName = monthLabel(range.from);
   const label =
-    weekOffset === 0
-      ? "Esta semana"
-      : weekOffset === -1
-        ? "Semana pasada"
-        : `${range.from.toLocaleDateString("es-MX")} – ${addDays(range.to, -1).toLocaleDateString("es-MX")}`;
+    period === "month"
+      ? offset === 0
+        ? `Este mes · ${monthName}`
+        : monthName
+      : offset === 0
+        ? "Esta semana"
+        : offset === -1
+          ? "Semana pasada"
+          : rangeText;
 
   const cards = [
     { label: "Ventas", value: money.format(data.revenue), icon: "sales" as const, tone: "green" },
@@ -190,11 +240,11 @@ export function ReportsPanel({ user }: { user: User }) {
     <section className="reference-panel print-area">
       <div className="panel-heading reference-heading-row">
         <div className="reference-heading">
-          <h1>{view === "sales" ? "Reporte semanal" : "Inventario"}</h1>
+          <h1>
+            {view === "sales" ? (period === "month" ? "Reporte mensual" : "Reporte semanal") : "Inventario"}
+          </h1>
           <p>
-            {view === "sales"
-              ? `${range.from.toLocaleDateString("es-MX")} – ${addDays(range.to, -1).toLocaleDateString("es-MX")}`
-              : "Lo que el negocio compra y almacena: insumos de barra."}
+            {view === "sales" ? rangeText : "Lo que el negocio compra y almacena: insumos de barra."}
           </p>
         </div>
         <div className="segmented">
@@ -214,13 +264,35 @@ export function ReportsPanel({ user }: { user: User }) {
       </div>
 
       {view === "sales" && (
-        <div className="week-nav">
-          <button onClick={() => setWeekOffset((value) => value - 1)}>← Anterior</button>
-          <strong>{label}</strong>
-          <button disabled={weekOffset >= 0} onClick={() => setWeekOffset((value) => value + 1)}>
-            Siguiente →
-          </button>
-        </div>
+        <>
+          <div className="segmented period-switch">
+            <button
+              className={period === "month" ? "active" : ""}
+              onClick={() => {
+                setPeriod("month");
+                setOffset(0);
+              }}
+            >
+              Por mes
+            </button>
+            <button
+              className={period === "week" ? "active" : ""}
+              onClick={() => {
+                setPeriod("week");
+                setOffset(0);
+              }}
+            >
+              Por semana
+            </button>
+          </div>
+          <div className="week-nav">
+            <button onClick={() => setOffset((value) => value - 1)}>← Anterior</button>
+            <strong>{label}</strong>
+            <button disabled={offset >= 0} onClick={() => setOffset((value) => value + 1)}>
+              Siguiente →
+            </button>
+          </div>
+        </>
       )}
 
       {error && <div className="notice error">{error}</div>}
@@ -228,6 +300,13 @@ export function ReportsPanel({ user }: { user: User }) {
 
       {view === "sales" && (
         <>
+      {truncated && (
+        <div className="notice error">
+          Este periodo tiene más de {maxOrders} pedidos y sólo se alcanzaron a cargar los más
+          recientes, así que las cifras de abajo salen incompletas. Revísalo por semana.
+        </div>
+      )}
+
       {data.missingCost > 0 && (
         <div className="notice error">
           {data.missingCost} {data.missingCost === 1 ? "producto vendido no tiene" : "productos vendidos no tienen"}{" "}
@@ -274,7 +353,9 @@ export function ReportsPanel({ user }: { user: User }) {
               </div>
             ))}
             {!data.topProducts.length && (
-              <p className="reference-empty">No hubo ventas en esta semana.</p>
+              <p className="reference-empty">
+                No hubo ventas en {period === "month" ? "este mes" : "esta semana"}.
+              </p>
             )}
           </div>
         </article>
@@ -286,6 +367,39 @@ export function ReportsPanel({ user }: { user: User }) {
             <div className="report-line"><span>Tarjeta</span><strong>{money.format(data.byMethod.CARD)}</strong></div>
             <div className="report-line"><span>Transferencia</span><strong>{money.format(data.byMethod.TRANSFER)}</strong></div>
             <div className="report-line"><span>Canceladas</span><strong>{data.cancelledCount}</strong></div>
+          </article>
+
+          <article className="reference-card">
+            <div className="card-heading">
+              <h2>Ventas por mes</h2>
+              <span>Cobrado</span>
+            </div>
+            {months === null && <p className="reference-empty">No se pudo cargar el resumen.</p>}
+            {months?.filter((row) => row.count > 0).map((row) => {
+              const esDelRango = row.from.getTime() === range.from.getTime();
+              return (
+                <button
+                  className={`report-line month-line${esDelRango && period === "month" ? " active" : ""}`}
+                  key={row.from.toISOString()}
+                  onClick={() => {
+                    setPeriod("month");
+                    setOffset(
+                      (row.from.getFullYear() - new Date().getFullYear()) * 12 +
+                        (row.from.getMonth() - new Date().getMonth()),
+                    );
+                  }}
+                >
+                  <span>
+                    {monthLabel(row.from)}
+                    <small>{row.count} pedidos</small>
+                  </span>
+                  <strong>{money.format(row.total)}</strong>
+                </button>
+              );
+            })}
+            {months?.every((row) => row.count === 0) && (
+              <p className="reference-empty">Todavía no hay ventas registradas.</p>
+            )}
           </article>
 
           <article className="reference-card">
@@ -304,7 +418,7 @@ export function ReportsPanel({ user }: { user: User }) {
       <article className="reference-card">
         <div className="card-heading">
           <h2>Movimientos de insumos</h2>
-          <span>Merma de la semana: {money.format(data.wasteCost)}</span>
+          <span>Merma {period === "month" ? "del mes" : "de la semana"}: {money.format(data.wasteCost)}</span>
         </div>
         <div className="report-table">
           <div className="report-head">
@@ -333,7 +447,9 @@ export function ReportsPanel({ user }: { user: User }) {
             </div>
           ))}
           {!data.wasteMovements.length && !data.adjustments.length && (
-            <p className="reference-empty">Sin movimientos de insumos esta semana.</p>
+            <p className="reference-empty">
+              Sin movimientos de insumos en {period === "month" ? "este mes" : "esta semana"}.
+            </p>
           )}
         </div>
       </article>

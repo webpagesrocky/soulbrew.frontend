@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  count,
   deleteDoc,
   doc,
   getAggregateFromServer,
@@ -211,11 +212,24 @@ export function startOfDay(date = new Date()): Date {
   return copy;
 }
 
+/** Primer día del mes al que pertenece `date`, a las 00:00. */
+export function startOfMonth(date = new Date()): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+/** El mismo día del mes de al lado. Se usa para moverse de mes en mes. */
+export function addMonths(date: Date, months: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
 /** Tope de pedidos por consulta, si quien llama no pide otro. */
 export const ORDERS_PAGE_SIZE = 500;
 
+/** Un mes entero no cabe en el tope normal: 600 pedidos en octubre de 2026. */
+export const MONTH_PAGE_SIZE = 3000;
+
 /**
- * Lo vendido desde el primer día, de verdad.
+ * Lo vendido en un rango, o desde el primer día si no se pide rango.
  *
  * La suma la hace el servidor: no se descargan los pedidos, así que no importa
  * cuántos miles haya. Antes el tablero sumaba lo que tenía a la mano —los 200
@@ -223,12 +237,36 @@ export const ORDERS_PAGE_SIZE = 500;
  * vieja fuera de la cuenta: el "total" se quedaba clavado en el mismo número
  * aunque el negocio siguiera vendiendo.
  */
-export async function fetchSalesTotal(): Promise<number> {
-  const snapshot = await getAggregateFromServer(
-    query(collection(db, "orders"), where("status", "==", "PAID")),
-    { total: sum("total") },
-  );
-  return snapshot.data().total ?? 0;
+export async function fetchSalesTotal(from?: Date, to?: Date): Promise<{ total: number; count: number }> {
+  const constraints: QueryConstraint[] = [where("status", "==", "PAID")];
+  if (from) constraints.push(where("createdAt", ">=", Timestamp.fromDate(from)));
+  if (to) constraints.push(where("createdAt", "<", Timestamp.fromDate(to)));
+  const snapshot = await getAggregateFromServer(query(collection(db, "orders"), ...constraints), {
+    total: sum("total"),
+    count: count(),
+  });
+  const data = snapshot.data();
+  return { total: data.total ?? 0, count: data.count ?? 0 };
+}
+
+/** Un mes ya sumado. `from` es el día 1, que sirve de identidad y de etiqueta. */
+export type MonthSales = { from: Date; total: number; count: number };
+
+/**
+ * Los últimos `months` meses, uno por uno, de más nuevo a más viejo.
+ *
+ * Es una lectura por mes —doce al abrir el reporte— porque cada suma la hace
+ * el servidor. Descargar los pedidos para sumarlos aquí costaría cientos de
+ * lecturas y volvería a toparse con un límite.
+ */
+export async function fetchMonthlySales(months = 12): Promise<MonthSales[]> {
+  const current = startOfMonth();
+  const rangos = Array.from({ length: months }, (_, index) => {
+    const from = addMonths(current, -index);
+    return { from, to: addMonths(from, 1) };
+  });
+  const sumas = await Promise.all(rangos.map((r) => fetchSalesTotal(r.from, r.to)));
+  return rangos.map((r, index) => ({ from: r.from, ...sumas[index] }));
 }
 
 /**
