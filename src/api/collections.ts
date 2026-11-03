@@ -270,6 +270,26 @@ export async function fetchMonthlySales(months = 12): Promise<MonthSales[]> {
 }
 
 /**
+ * Los pedidos de un rango, de una sola vez.
+ *
+ * Es para descargar un mes sin tener que abrirlo primero: a diferencia de
+ * `subscribeOrdersBetween` no deja una suscripción viva, porque quien exporta
+ * quiere la foto del momento, no estar escuchando cambios.
+ */
+export async function fetchOrdersBetween(from: Date, to: Date, max = MONTH_PAGE_SIZE) {
+  const snapshot = await getDocs(
+    query(
+      collection(db, "orders"),
+      where("createdAt", ">=", Timestamp.fromDate(from)),
+      where("createdAt", "<", Timestamp.fromDate(to)),
+      orderBy("createdAt", "asc"),
+      limit(max),
+    ),
+  );
+  return snapshot.docs.map(toOrder);
+}
+
+/**
  * Pedidos dentro de un rango. Lo usan tanto el panel del día como el historial
  * y el reporte semanal, que sólo cambian los extremos del rango.
  *
