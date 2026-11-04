@@ -808,7 +808,6 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .session-edit { align-self: start; margin-top: 10px; border: 1px solid rgba(255,255,255,.35); border-radius: 8px; background: transparent; padding: 7px 13px; color: #f3ece4; font-size: 11px; font-weight: 750; cursor: pointer; }
 .session-edit:hover:enabled { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.6); }
 .session-edit:disabled { opacity: .45; cursor: progress; }
-.session-delete:disabled { opacity: .4; cursor: not-allowed; }
 .order-admin-actions { display: flex; gap: 14px; align-items: center; }
 
 /* Historial */
@@ -1177,7 +1176,6 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
   .internal-shell .product-edit,
   .internal-shell .category-delete,
   .internal-shell .session-receipt,
-  .internal-shell .session-delete,
   .internal-shell .card-heading button,
   .mobile-header button { min-height: 36px; }
   .internal-shell .row-delete { width: 32px; height: 32px; }
