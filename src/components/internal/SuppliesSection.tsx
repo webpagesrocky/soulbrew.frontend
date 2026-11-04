@@ -870,7 +870,8 @@ export function SuppliesSection({ user, from, onError, onMessage }: Props) {
             <h2>Actualizar existencia</h2>
             <p>
               Sólo para cuando vuelves a comprar o cuando el conteo no cuadra. Las ventas se
-              descuentan solas y la merma se anota al cerrar el turno.
+              descuentan solas; lo que se derrame o se eche a perder se baja aquí, con un
+              ajuste y su motivo.
             </p>
 
             <div className="inventory-tabs move-tabs">

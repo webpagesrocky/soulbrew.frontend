@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { subscribeCashSessions, subscribeSupplies } from "../../api/collections";
+import { subscribeCashSessions } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
 import {
   closeCashSession,
   openCashSession,
-  registerSupplyWaste,
   updateOpeningAmount,
 } from "../../api/transactions";
-import type { CashSession, CashTotals, Supply, User } from "../../types";
-import { WasteEditor, type WasteLine } from "./WasteEditor";
+import type { CashSession, CashTotals, User } from "../../types";
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
@@ -21,7 +19,6 @@ interface ClosingReport {
   expectedAmount: number;
   differenceAmount: number;
   totals: CashTotals;
-  waste: Array<{ name: string; quantity: number; unit: string; reason: string }>;
 }
 
 export function CashPanel({ user }: { user: User }) {
@@ -30,20 +27,10 @@ export function CashPanel({ user }: { user: User }) {
   const [error, setError] = useState("");
   const [report, setReport] = useState<ClosingReport | null>(null);
   const [busy, setBusy] = useState(false);
-  const [supplies, setSupplies] = useState<Supply[]>([]);
-  const [waste, setWaste] = useState<WasteLine[]>([]);
   // El historial se abre sólo si lo piden: en el día a día estorba y lo que
   // importa es la caja de hoy, no los cortes de la semana pasada.
   const [showHistory, setShowHistory] = useState(false);
 
-  useEffect(
-    () =>
-      subscribeSupplies(
-        setSupplies,
-        (reason) => setError(errorMessage(reason, "No se pudo cargar el inventario")),
-      ),
-    [],
-  );
 
   useEffect(
     () =>
@@ -70,15 +57,6 @@ export function CashPanel({ user }: { user: User }) {
     setError("");
     try {
       if (current) {
-        // La merma se aplica ANTES de cerrar: una vez cerrado el turno ya no
-        // se puede tocar, y así el inventario final del corte ya la refleja.
-        for (const line of waste) {
-          await registerSupplyWaste(line.supplyId, line.quantity, line.reason, {
-            uid: user.id,
-            name: user.name,
-          });
-        }
-
         const result = await closeCashSession(current.id, Number(amount));
         setReport({
           userName: current.userName,
@@ -89,14 +67,7 @@ export function CashPanel({ user }: { user: User }) {
           expectedAmount: result.expectedAmount,
           differenceAmount: result.differenceAmount,
           totals: result.totals,
-          waste: waste.map((line) => ({
-            name: supplies.find((supply) => supply.id === line.supplyId)?.name ?? line.supplyId,
-            unit: supplies.find((supply) => supply.id === line.supplyId)?.unit ?? '',
-            quantity: line.quantity,
-            reason: line.reason,
-          })),
         });
-        setWaste([]);
       } else {
         await openCashSession(Number(amount), { uid: user.id, name: user.name });
       }
@@ -134,7 +105,6 @@ export function CashPanel({ user }: { user: User }) {
       expectedAmount: session.expectedAmount,
       differenceAmount: session.differenceAmount,
       totals: session.totals,
-      waste: [],
     });
   }
 
@@ -224,9 +194,6 @@ export function CashPanel({ user }: { user: User }) {
               <small className="cash-hint">
                 Cuenta todo el cajón, incluido el fondo con el que abriste.
               </small>
-            )}
-            {current && (
-              <WasteEditor supplies={supplies} lines={waste} onChange={setWaste} />
             )}
             <button className="primary-button light-button" disabled={busy}>
               {busy
@@ -320,20 +287,6 @@ export function CashPanel({ user }: { user: User }) {
             <div className="cash-report-row"><span>Tarjeta</span><span>{money.format(report.totals.cardTotal)}</span></div>
             <div className="cash-report-row"><span>Transferencia</span><span>{money.format(report.totals.transferTotal)}</span></div>
 
-            {report.waste.length > 0 && (
-              <>
-                <p className="cash-report-section">Merma registrada</p>
-                {report.waste.map((line, index) => (
-                  <div className="cash-report-row" key={`${line.name}-${index}`}>
-                    <span>
-                      {line.quantity} × {line.name}
-                      <small> · {line.reason}</small>
-                    </span>
-                    <span>—</span>
-                  </div>
-                ))}
-              </>
-            )}
 
             <div className="cash-report-actions">
               <button className="reference-primary" onClick={() => window.print()}>Imprimir</button>

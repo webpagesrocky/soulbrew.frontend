@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   addMonths,
   fetchMonthlySales,
-  fetchOrdersBetween,
   MONTH_PAGE_SIZE,
   ORDERS_PAGE_SIZE,
   startOfDay,
@@ -40,36 +39,6 @@ function monthLabel(date: Date): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/**
- * Una celda lista para CSV.
- *
- * Se usa punto y coma como separador porque es lo que Excel en español espera
- * al abrir el archivo de doble clic; Google Sheets lo detecta igual. Las
- * comillas dentro del texto se duplican, que es como manda el formato.
- */
-function csvCell(value: string | number): string {
-  const text = String(value ?? "");
-  return /[";\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-function csvRows(rows: (string | number)[][]): string {
-  return rows.map((row) => row.map(csvCell).join(";")).join("\r\n");
-}
-
-/** Dispara la descarga de un texto como archivo, sin pasar por ningún servidor. */
-function descargarTexto(nombre: string, contenido: string) {
-  // El BOM es lo que hace que Excel lea los acentos bien en vez de "Fr√≠o".
-  const blob = new Blob([`﻿${contenido}`], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const enlace = document.createElement("a");
-  enlace.href = url;
-  enlace.download = nombre;
-  document.body.appendChild(enlace);
-  enlace.click();
-  enlace.remove();
-  URL.revokeObjectURL(url);
-}
-
 function addDays(date: Date, days: number): Date {
   const copy = new Date(date);
   copy.setDate(copy.getDate() + days);
@@ -87,7 +56,6 @@ export function ReportsPanel({ user }: { user: User }) {
   // Abre en Ventas: es lo que se consulta a diario. Antes abría en Inventario
   // y las ventas del mes quedaban escondidas detrás de una pestaña.
   const [view, setView] = useState<"sales" | "inventory">("sales");
-  const [bajando, setBajando] = useState<string>("");
   const [inventoryTab, setInventoryTab] = useState<"forecast" | "supplies">("forecast");
   // El mes es lo que se compara contra el banco y contra lo que la dueña
   // cuenta, así que es el periodo por defecto; la semana sigue disponible.
@@ -251,73 +219,6 @@ export function ReportsPanel({ user }: { user: User }) {
     };
   }, [orders, movements, products, categories, supplies]);
 
-  /**
-   * Baja un mes entero como CSV: primero el resumen y luego un renglón por
-   * bebida pedida, con su personalización y de dónde sale su precio.
-   *
-   * Los pedidos se piden aquí en vez de usar los que ya están en pantalla,
-   * para poder bajar cualquier mes sin tener que abrirlo antes.
-   */
-  async function descargarMes(desde: Date) {
-    const clave = desde.toISOString();
-    setBajando(clave);
-    setError("");
-    try {
-      const hasta = addMonths(desde, 1);
-      const pedidos = await fetchOrdersBetween(desde, hasta);
-      const pagados = pedidos.filter((order) => order.status === "PAID");
-      const porMetodo = { CASH: 0, CARD: 0, TRANSFER: 0 };
-      for (const order of pagados) {
-        if (order.paymentMethod) porMetodo[order.paymentMethod] += order.total;
-      }
-      const total = pagados.reduce((suma, order) => suma + order.total, 0);
-
-      const filas: (string | number)[][] = [
-        [`Soul Brew - ventas de ${monthLabel(desde)}`],
-        [],
-        ["Pedidos cobrados", pagados.length],
-        ["Efectivo", porMetodo.CASH],
-        ["Tarjeta", porMetodo.CARD],
-        ["Transferencia", porMetodo.TRANSFER],
-        ["VENTA TOTAL", total],
-        ["Cancelados", pedidos.filter((order) => order.status === "CANCELLED").length],
-        [],
-        ["Código", "Fecha", "Hora", "Estado", "Forma de pago", "Cliente",
-         "Producto", "Personalización", "Cantidad", "Precio base", "Extras",
-         "Precio unitario", "Subtotal", "Total del ticket"],
-      ];
-      for (const order of pedidos) {
-        for (const item of order.items) {
-          const extras = item.options.reduce((suma, opcion) => suma + opcion.priceDelta, 0);
-          filas.push([
-            order.code,
-            order.createdAt?.toLocaleDateString("es-MX") ?? "",
-            order.createdAt?.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }) ?? "",
-            order.status === "PAID" ? "Pagado" : order.status === "PENDING" ? "Pendiente" : "Cancelado",
-            order.paymentMethod ? methodLabel[order.paymentMethod] : "",
-            order.customerName,
-            item.productName,
-            item.options
-              .map((o) => o.optionName + (o.priceDelta ? ` (+$${o.priceDelta})` : ""))
-              .join(", "),
-            item.quantity,
-            item.unitPrice - extras,
-            extras,
-            item.unitPrice,
-            item.subtotal,
-            order.total,
-          ]);
-        }
-      }
-      const mes = `${desde.getFullYear()}-${String(desde.getMonth() + 1).padStart(2, "0")}`;
-      descargarTexto(`SoulBrew ventas ${mes}.csv`, csvRows(filas));
-      setMessage(`Se bajó ${monthLabel(desde)}: ${pagados.length} pedidos, ${money.format(total)}.`);
-    } catch (reason) {
-      setError(errorMessage(reason, "No se pudo bajar el mes"));
-    } finally {
-      setBajando("");
-    }
-  }
 
   const rangeText = `${range.from.toLocaleDateString("es-MX")} – ${addDays(range.to, -1).toLocaleDateString("es-MX")}`;
   const monthName = monthLabel(range.from);
@@ -422,7 +323,7 @@ export function ReportsPanel({ user }: { user: User }) {
       <article className="reference-card month-card">
         <div className="card-heading">
           <h2>Ventas por mes</h2>
-          <span>Toca un mes para verlo con detalle, o bájalo a Excel</span>
+          <span>Toca un mes para ver su reporte</span>
         </div>
         {months === null && <p className="reference-empty">No se pudo cargar el resumen.</p>}
         {months
@@ -445,13 +346,6 @@ export function ReportsPanel({ user }: { user: User }) {
                   <small>{row.count} pedidos</small>
                 </button>
                 <strong className="month-total">{money.format(row.total)}</strong>
-                <button
-                  className="month-download"
-                  disabled={bajando === row.from.toISOString()}
-                  onClick={() => void descargarMes(row.from)}
-                >
-                  {bajando === row.from.toISOString() ? "Bajando…" : "Excel"}
-                </button>
               </div>
             );
           })}

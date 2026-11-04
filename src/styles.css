@@ -1003,7 +1003,6 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 
 /* Editor de un grupo de personalización: nombre, recargo, orden y foto. */
 .editor-card.wide { max-width: 560px; }
-.option-group-row { grid-template-columns: minmax(0, 1fr) auto auto; }
 .option-list { margin: 8px 0 10px; }
 .option-row { padding: 10px 0; border-bottom: 1px solid var(--ref-border); }
 .option-row:last-child { border-bottom: 0; }
@@ -1065,6 +1064,18 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .reference-product > div:nth-child(2) > small { display: block; overflow: hidden; color: #9d714f; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .reference-product > span { font-size: 10px; }
 .reference-product > b { min-width: 42px; color: #8b644b; font-size: 10px; text-align: right; }
+/* El renglon de un grupo de personalizacion tiene 3 hijos, no 6: nombre,
+   Activo y Opciones. Con las 6 columnas de .reference-product el nombre caia
+   en la columna de 53px de la miniatura -y se partia en "Tipo / de / leche"-
+   mientras Activo se estiraba por toda la columna flexible. Va despues porque
+   las dos reglas pesan igual y gana la ultima. */
+.option-group-row { grid-template-columns: minmax(0, 1fr) auto auto; min-height: 58px; }
+/* Y el texto es el hijo 1, no el 2, asi que no heredaba nada de lo de arriba. */
+.option-group-row > div:first-child { min-width: 0; }
+.option-group-row > div:first-child > strong { display: block; margin-bottom: 4px; font-size: 13px; }
+.option-group-row > div:first-child > small { display: block; overflow: hidden; color: #9d714f; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+/* El boton de Activo se dimensiona por su texto, no por la columna. */
+.option-group-row > .avail-toggle { justify-self: end; width: auto; }
 
 /* Interruptor de disponibilidad: mismo lugar que antes ocupaba el badge de
    sólo lectura, ahora clicable para marcar "agotado hoy" sin tocar stock. */
@@ -1128,6 +1139,12 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
   .reference-product > .avail-toggle { grid-row: 2; }
   .reference-product > .avail-toggle:first-of-type { grid-column: 2; justify-self: start; }
   .reference-product > span { display: none; }
+  /* El grupo sigue teniendo 3 hijos: nombre arriba, y debajo Activo y
+     Opciones lado a lado. */
+  .option-group-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .option-group-row > div:first-child { grid-column: 1 / -1; }
+  .option-group-row > .avail-toggle:first-of-type { grid-row: 2; grid-column: 1; justify-self: start; }
+  .option-group-row > .product-edit { grid-row: 2; grid-column: 2; justify-self: end; }
   .product-edit { padding: 6px 9px; }
   .reference-heading-row { align-items: stretch; }
   .reference-heading-row .segmented { width: 100%; }
