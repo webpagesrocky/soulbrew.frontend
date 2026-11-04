@@ -858,7 +858,7 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
    renglón más de la tarjeta: sin fondo ni borde propios. */
 /* Tarjeta de meses: el mes, lo vendido y el botón para bajarlo a Excel. */
 .month-card { margin-bottom: 18px; }
-.month-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 3px 0; border-bottom: 1px dotted var(--ref-border); }
+.month-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 3px 0; border-bottom: 1px dotted var(--ref-border); }
 .month-row:last-child { border-bottom: 0; }
 .month-row.active { background: #faf6f2; }
 .month-pick { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 7px 6px; border: 0; background: transparent; text-align: left; cursor: pointer; }
@@ -868,9 +868,6 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .month-pick small { color: #a17b61; font-size: 10px; font-weight: 600; }
 /* El importe nunca se parte: es lo que se viene a leer. */
 .month-total { white-space: nowrap; font-size: 14px; font-weight: 800; color: #35231a; }
-.month-download { border: 1px solid #ddcabb; border-radius: 8px; background: #fff; padding: 7px 13px; font-size: 11px; font-weight: 750; color: #67442f; white-space: nowrap; cursor: pointer; }
-.month-download:hover:enabled { border-color: var(--ref-brown); background: #f8f1eb; }
-.month-download:disabled { opacity: .5; cursor: progress; }
 .week-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 340px; margin-bottom: 18px; padding: 7px 10px; border: 1px solid var(--ref-border); border-radius: 10px; background: #fff; }
 .week-nav strong { font-size: 12px; color: #4a3527; }
 .week-nav button { border: 0; background: transparent; color: #6d4831; font-size: 11px; font-weight: 750; }
@@ -1196,10 +1193,7 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
   .internal-shell .card-heading button,
   .mobile-header button { min-height: 36px; }
   .internal-shell .row-delete { width: 32px; height: 32px; }
-  /* En telefono el renglon del mes se parte: nombre y venta arriba, el
-     boton de Excel abajo a lo ancho, para que se pueda picar con el dedo. */
-  .month-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; padding: 6px 0; }
-  .month-download { grid-column: 1 / -1; min-height: 38px; }
+  .month-row { padding: 6px 0; }
   /* El titulo y su explicacion no caben lado a lado en 375px: el titulo
      se parte en "Ventas / por / mes". Van uno debajo del otro. */
   .month-card .card-heading { flex-direction: column; align-items: flex-start; gap: 2px; }
