@@ -444,6 +444,31 @@ export async function openCashSession(openingAmount: number, actor: Actor) {
   });
 }
 
+/**
+ * Corrige el fondo inicial de un turno que sigue abierto.
+ *
+ * Es el reemplazo de borrar el corte. Mientras está abierto no hay ninguna
+ * cifra calculada todavía —el esperado y el descuadre salen al cerrar—, así
+ * que cambiar el fondo aquí no desacomoda nada: el corte se cerrará con el
+ * número bueno. Un corte ya cerrado no se toca, porque su descuadre ya quedó
+ * asentado y moverlo cambiaría la historia.
+ */
+export async function updateOpeningAmount(sessionId: string, openingAmount: number) {
+  if (!Number.isFinite(openingAmount) || openingAmount < 0) {
+    throw new OrderError("El fondo inicial tiene que ser un número de 0 para arriba.");
+  }
+  const sessionRef = doc(db, "cashSessions", sessionId);
+  return runTransaction(db, async (tx: Transaction) => {
+    const sessionSnap = await tx.get(sessionRef);
+    if (!sessionSnap.exists()) throw new OrderError("Corte de caja no encontrado");
+    if (sessionSnap.data()?.status !== "OPEN") {
+      throw new OrderError("Ese corte ya está cerrado: su descuadre ya quedó asentado.");
+    }
+    tx.update(sessionRef, { openingAmount: round2(openingAmount) });
+    return { id: sessionId, openingAmount: round2(openingAmount) };
+  });
+}
+
 export async function closeCashSession(sessionId: string, closingAmount: number) {
   // Los totales se calculan con una consulta fuera de la transacción: el SDK
   // web no permite consultas (sólo lecturas por referencia) dentro de

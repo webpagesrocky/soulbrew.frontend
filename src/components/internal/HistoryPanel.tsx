@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { ORDERS_PAGE_SIZE, startOfDay, subscribeOrdersBetween } from "../../api/collections";
+import {
+  addMonths,
+  fetchMonthlySales,
+  MONTH_PAGE_SIZE,
+  startOfMonth,
+  subscribeOrdersBetween,
+  type MonthSales,
+} from "../../api/collections";
 import { errorMessage } from "../../api/errors";
 import { deleteOrder } from "../../api/transactions";
 import type { Order, User } from "../../types";
@@ -10,15 +17,11 @@ const statusLabel = { PENDING: "Pendiente", PAID: "Pagada", CANCELLED: "Cancelad
 /** En el recibo no va "CASH": eso es el nombre interno del método. */
 const methodLabel = { CASH: "Efectivo", CARD: "Tarjeta", TRANSFER: "Transferencia" } as const;
 
-/**
- * Días que se cargan de una vez, y cuántos añade cada "ver más".
- *
- * Antes se pedían 60 días de golpe contra un tope de 500 pedidos. Con 20 o 30
- * ventas diarias eso son unos 20 días: los más viejos se quedaban fuera sin
- * que nada lo dijera, y el encabezado seguía prometiendo 60. En tramos de dos
- * semanas cabe todo con margen, y quien necesite ir más atrás lo pide.
- */
-const PAGE_DAYS = 14;
+/** "noviembre de 2026" -> "Noviembre de 2026", sólo la primera letra. */
+function monthLabel(date: Date): string {
+  const text = date.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 /**
  * Recibos y pedidos día por día, hoy incluido.
@@ -44,34 +47,49 @@ export function HistoryPanel({ user }: { user: User }) {
     );
   }
 
-  const [days, setDays] = useState(PAGE_DAYS);
+  // Un mes a la vez. Antes se cargaban los últimos 14 días y se iban
+  // apilando con cada "ver más", así que para mirar un día viejo había que
+  // pasar por todos los de en medio. Ahora se elige el mes y sólo sale ese.
+  const [month, setMonth] = useState<Date>(() => startOfMonth());
+  const [months, setMonths] = useState<MonthSales[] | null>(null);
 
-  // Hoy también entra: al cerrar la caja se viene aquí a revisar el día que
-  // acaba de pasar, y tener que acordarse de que hoy "todavía no es historial"
-  // sólo confunde. Sale arriba, como un día más.
-  const from = useMemo(() => {
-    const start = startOfDay();
-    start.setDate(start.getDate() - days + 1);
-    return start;
-  }, [days]);
+  useEffect(() => {
+    let vigente = true;
+    fetchMonthlySales(12)
+      .then((rows) => {
+        if (vigente) setMonths(rows);
+      })
+      .catch(() => {
+        if (vigente) setMonths(null);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, []);
+
+  // El mes elegido, completo. El mes en curso incluye hoy: al cerrar la caja
+  // se viene aquí a revisar el día que acaba de pasar, y tener que acordarse de
+  // que hoy "todavía no es historial" sólo confunde.
+  const range = useMemo(() => ({ from: month, to: addMonths(month, 1) }), [month]);
 
   useEffect(
     () =>
       subscribeOrdersBetween(
-        from,
-        null,
+        range.from,
+        range.to,
         (rows) => {
           setOrders(rows);
           setError("");
         },
         (reason) => setError(errorMessage(reason, "No se pudo cargar el historial")),
+        MONTH_PAGE_SIZE,
       ),
-    [from],
+    [range],
   );
 
   // Si llegaron justo los del tope, la consulta cortó por el extremo viejo y
   // hay días incompletos abajo. Mejor decirlo que enseñar cifras a medias.
-  const truncated = orders.length >= ORDERS_PAGE_SIZE;
+  const truncated = orders.length >= MONTH_PAGE_SIZE;
 
   // Los tickets se leen por día, que es como se revisa un historial de caja.
   const byDay = useMemo(() => {
@@ -106,13 +124,28 @@ export function HistoryPanel({ user }: { user: User }) {
     <section className="reference-panel">
       <div className="reference-heading">
         <h1>Historial</h1>
-        <p>Recibos y pedidos de los últimos {days} días. Toca un día para abrirlo.</p>
+        <p>Recibos y pedidos de {monthLabel(month)}. Toca un día para abrirlo.</p>
+      </div>
+
+      <div className="filter-pills month-tabs">
+        {(months ?? [])
+          .filter((row) => row.count > 0)
+          .map((row) => (
+            <button
+              type="button"
+              key={row.from.toISOString()}
+              className={row.from.getTime() === month.getTime() ? "active" : ""}
+              onClick={() => setMonth(row.from)}
+            >
+              {monthLabel(row.from)}
+            </button>
+          ))}
       </div>
       {error && <div className="notice error">{error}</div>}
       {truncated && (
         <div className="notice">
-          Son demasiados pedidos para enseñarlos juntos: los días más viejos de este tramo pueden
-          salir incompletos.
+          Este mes trae más de {MONTH_PAGE_SIZE} pedidos y sólo se alcanzaron a cargar los más
+          recientes, así que los días de abajo pueden salir incompletos.
         </div>
       )}
 
@@ -164,17 +197,7 @@ export function HistoryPanel({ user }: { user: User }) {
       })}
 
       {!byDay.length && !error && (
-        <div className="empty-state">No hay pedidos en los últimos {days} días.</div>
-      )}
-
-      {/* Sin tope de días: el botón sigue estirando el rango hacia atrás, y si
-          algún tramo se pasa del tope de pedidos, el aviso de arriba lo dice. */}
-      {!!byDay.length && (
-        <div className="history-more">
-          <button type="button" onClick={() => setDays((current) => current + PAGE_DAYS)}>
-            Ver {PAGE_DAYS} días más
-          </button>
-        </div>
+        <div className="empty-state">No hubo pedidos en {monthLabel(month)}.</div>
       )}
 
       {openReceipt && (

@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { deleteCashSession, subscribeCashSessions, subscribeSupplies } from "../../api/collections";
+import { subscribeCashSessions, subscribeSupplies } from "../../api/collections";
 import { errorMessage } from "../../api/errors";
-import { closeCashSession, openCashSession, registerSupplyWaste } from "../../api/transactions";
+import {
+  closeCashSession,
+  openCashSession,
+  registerSupplyWaste,
+  updateOpeningAmount,
+} from "../../api/transactions";
 import type { CashSession, CashTotals, Supply, User } from "../../types";
 import { WasteEditor, type WasteLine } from "./WasteEditor";
 
@@ -133,20 +138,38 @@ export function CashPanel({ user }: { user: User }) {
     });
   }
 
-  async function removeSession(session: CashSession) {
-    const confirmed = window.confirm(
-      `¿Borrar el corte de ${session.userName} del ` +
-        `${session.openedAt ? session.openedAt.toLocaleDateString("es-MX") : "—"}?\n\n` +
-        "Desaparece del historial y del reporte semanal. Las ventas de ese turno " +
-        "se conservan, pero quedan sin corte asociado y ya no se podrán cancelar.",
+  /**
+   * Corrige el fondo inicial del turno abierto.
+   *
+   * Reemplaza al botón de borrar. Un corte borrado dejaba sus ventas sin corte
+   * y el historial sin forma de cuadrar; si el fondo se teclea mal, lo que hay
+   * que hacer es corregirlo, no desaparecer el turno. Mientras el corte sigue
+   * abierto no hay ninguna cifra calculada todavía, así que corregirlo aquí no
+   * desacomoda nada: cerrará con el número bueno.
+   */
+  async function editarCorteActual(session: CashSession) {
+    const escrito = window.prompt(
+      "¿Con cuánto se abrió la caja de verdad?\n\n" +
+        `Ahora dice ${money.format(session.openingAmount)}. Corrígelo si se tecleó mal: ` +
+        "el turno sigue abierto, así que el efectivo esperado y el descuadre se " +
+        "calcularán con el número que dejes aquí.",
+      String(session.openingAmount),
     );
-    if (!confirmed) return;
+    if (escrito === null) return;
+
+    // Aquí se escribe con coma decimal tan seguido como con punto.
+    const monto = Number(escrito.trim().replace(",", "."));
+    if (!Number.isFinite(monto) || monto < 0) {
+      return setError("Escribe el fondo inicial como número, de 0 para arriba.");
+    }
+    if (monto === session.openingAmount) return;
 
     setBusy(true);
+    setError("");
     try {
-      await deleteCashSession(session.id);
+      await updateOpeningAmount(session.id, monto);
     } catch (reason) {
-      setError(errorMessage(reason, "No se pudo borrar el corte"));
+      setError(errorMessage(reason, "No se pudo corregir el corte"));
     } finally {
       setBusy(false);
     }
@@ -170,6 +193,14 @@ export function CashPanel({ user }: { user: User }) {
                 Fondo inicial · abrió{" "}
                 {current.openedAt ? current.openedAt.toLocaleString("es-MX") : "hace un momento"}
               </p>
+              <button
+                type="button"
+                className="session-edit"
+                disabled={busy}
+                onClick={() => void editarCorteActual(current)}
+              >
+                Editar corte actual
+              </button>
             </>
           ) : (
             <>
@@ -246,16 +277,6 @@ export function CashPanel({ user }: { user: User }) {
                       aria-label={`Ver recibo del corte de ${session.userName}`}
                     >
                       Ver recibo
-                    </button>
-                  )}
-                  {user.role === "ADMIN" && session.status === "CLOSED" && (
-                    <button
-                      className="session-delete"
-                      disabled={busy}
-                      onClick={() => void removeSession(session)}
-                      aria-label={`Borrar corte de ${session.userName}`}
-                    >
-                      Borrar
                     </button>
                   )}
                 </div>

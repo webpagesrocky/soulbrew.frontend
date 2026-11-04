@@ -537,10 +537,6 @@ export async function deleteSupplyMovement(id: string) {
 }
 
 /** Borra un corte de caja. Las reglas sólo lo permiten si ya está cerrado. */
-export async function deleteCashSession(id: string) {
-  await deleteDoc(doc(db, "cashSessions", id));
-}
-
 /** Categorías del menú. Lectura pública: el menú las necesita sin sesión. */
 export function subscribeCategories(
   onData: (categories: Category[]) => void,

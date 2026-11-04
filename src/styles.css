@@ -746,6 +746,9 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
   font-weight: 700;
 }
 .filter-pills button.active { background: var(--ref-brown); color: #fff; }
+/* Los meses del historial pueden ser doce: se envuelven en vez de
+   desbordar, y van pegados al encabezado. */
+.month-tabs { flex-wrap: wrap; margin-top: 4px; }
 
 /* Selector de imagen del producto */
 .image-picker { display: grid; gap: 8px; margin-bottom: 9px; }
@@ -800,8 +803,11 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 /* Volver a abrir el recibo de un corte ya cerrado. */
 .session-receipt { flex: 0 0 auto; margin-left: 12px; border: 1px solid var(--line); border-radius: 7px; background: transparent; padding: 5px 11px; color: var(--forest); font-size: 11px; font-weight: 750; }
 .session-receipt:hover { background: #f3f1ec; border-color: var(--forest); }
-.session-delete { flex: 0 0 auto; margin-left: 12px; border: 1px solid #e6c4b8; border-radius: 7px; background: transparent; padding: 5px 11px; color: #b2452a; font-size: 11px; font-weight: 750; }
-.session-delete:hover:enabled { background: #fdf1ed; border-color: #b2452a; }
+/* Corregir el corte abierto. Va dentro de la tarjeta oscura de Caja actual,
+   asi que su borde y su texto son claros, no cafes. */
+.session-edit { align-self: start; margin-top: 10px; border: 1px solid rgba(255,255,255,.35); border-radius: 8px; background: transparent; padding: 7px 13px; color: #f3ece4; font-size: 11px; font-weight: 750; cursor: pointer; }
+.session-edit:hover:enabled { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.6); }
+.session-edit:disabled { opacity: .45; cursor: progress; }
 .session-delete:disabled { opacity: .4; cursor: not-allowed; }
 .order-admin-actions { display: flex; gap: 14px; align-items: center; }
 
@@ -1083,6 +1089,10 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
 .reference-shell .dark-card { background: var(--ref-brown); border-color: var(--ref-brown); }
 .reference-shell .dark-card .primary-button { background: #f1e3d2; color: var(--ref-brown-deep); }
 .reference-shell .feature-card h3 { color: #3c281d; font-weight: 700; }
+/* Esa regla es para las tarjetas claras, pero la tarjeta de Caja actual
+   tambien es .feature-card: sobre el cafe el titulo quedaba en contraste
+   1.25:1, practicamente invisible. Misma especificidad, va despues. */
+.reference-shell .dark-card h3 { color: #fff; }
 .reference-shell th { background: #f5f0ea; color: #8b654d; }
 
 @media (max-width: 1200px) {
@@ -1163,7 +1173,7 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
   .internal-shell .avail-toggle,
   .internal-shell .pill-on,
   .internal-shell .pill-off,
-  .internal-shell .filter-pills button,
+  .internal-shell .filter-pills button, .internal-shell .session-edit,
   .internal-shell .product-edit,
   .internal-shell .category-delete,
   .internal-shell .session-receipt,
@@ -1179,4 +1189,8 @@ td small { display: block; margin-top: .25rem; max-width: 300px; }
      se parte en "Ventas / por / mes". Van uno debajo del otro. */
   .month-card .card-heading { flex-direction: column; align-items: flex-start; gap: 2px; }
   .month-card .card-heading span { font-size: 11px; }
+  /* El dia y su resumen no caben lado a lado: el titulo se parte en tres
+     renglones a media palabra. Van uno debajo del otro. */
+  .day-toggle { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+  .day-toggle h2 { font-size: 14px; }
 }
